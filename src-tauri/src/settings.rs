@@ -197,6 +197,10 @@ pub struct AppSettings {
     pub post_process_selected_prompt_id: Option<String>,
     #[serde(default)]
     pub mute_while_recording: bool,
+    #[serde(default = "default_lower_volume_while_recording")]
+    pub lower_volume_while_recording: bool,
+    #[serde(default = "default_volume_while_recording")]
+    pub volume_while_recording: f32,
 }
 
 fn default_model() -> String {
@@ -315,6 +319,14 @@ fn default_post_process_prompts() -> Vec<LLMPrompt> {
     }]
 }
 
+fn default_lower_volume_while_recording() -> bool {
+    false
+}
+
+fn default_volume_while_recording() -> f32 {
+    0.3
+}
+
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
@@ -369,6 +381,8 @@ pub fn get_default_settings() -> AppSettings {
         post_process_prompts: default_post_process_prompts(),
         post_process_selected_prompt_id: None,
         mute_while_recording: false,
+        lower_volume_while_recording: false,
+        volume_while_recording: default_volume_while_recording(),
     }
 }
 

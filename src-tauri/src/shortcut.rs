@@ -335,6 +335,22 @@ pub fn change_post_process_base_url_setting(
     Ok(())
 }
 
+#[tauri::command]
+pub fn change_lower_volume_while_recording_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.lower_volume_while_recording = enabled;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn change_volume_while_recording_setting(app: AppHandle, volume: f32) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.volume_while_recording = volume;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
 /// Generic helper to validate provider exists
 fn validate_provider_exists(
     settings: &settings::AppSettings,

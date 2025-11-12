@@ -94,6 +94,37 @@ impl AudioRecordingManager {
         Ok(manager)
     }
 
+    /* ---------- volume control --------------------------------------------- */
+
+    pub fn set_recording_start_volume(&self) {
+        let settings = get_settings(&self.app_handle);
+        let mut initial_volume_guard = self.initial_volume.lock().unwrap();
+
+        if settings.mute_while_recording {
+            *initial_volume_guard = Some(self.volume_controller.get_system_volume());
+            self.volume_controller.set_system_volume(0);
+            return;
+        } else if settings.lower_volume_while_recording {
+            let current_vol = Some(self.volume_controller.get_system_volume());
+            if current_vol.is_none() || current_vol.unwrap() <= (settings.volume_while_recording * 100.0) as u8 {
+                return;
+            }
+
+            *initial_volume_guard = current_vol;
+            self.volume_controller.set_system_volume((settings.volume_while_recording * 100.0) as u8);
+        } else {
+            *initial_volume_guard = None;
+        };
+    }
+
+    pub fn restore_initial_volume(&self) {
+        let mut initial_volume_guard = self.initial_volume.lock().unwrap();
+        if let Some(vol) = *initial_volume_guard {
+            self.volume_controller.set_system_volume(vol);
+        }
+        *initial_volume_guard = None;
+    }
+
     /* ---------- microphone life-cycle -------------------------------------- */
 
     pub fn start_microphone_stream(&self) -> Result<(), anyhow::Error> {
@@ -105,15 +136,7 @@ impl AudioRecordingManager {
 
         let start_time = Instant::now();
 
-        let settings = get_settings(&self.app_handle);
-        let mut initial_volume_guard = self.initial_volume.lock().unwrap();
-
-        if settings.mute_while_recording {
-            *initial_volume_guard = Some(self.volume_controller.get_system_volume());
-            self.volume_controller.set_system_volume(0);
-        } else {
-            *initial_volume_guard = None;
-        }
+        self.set_recording_start_volume();
 
         let vad_path = self
             .app_handle
@@ -169,11 +192,7 @@ impl AudioRecordingManager {
             return;
         }
 
-        let mut initial_volume_guard = self.initial_volume.lock().unwrap();
-        if let Some(vol) = *initial_volume_guard {
-            self.volume_controller.set_system_volume(vol);
-        }
-        *initial_volume_guard = None;
+        self.restore_initial_volume();
 
         if let Some(rec) = self.recorder.lock().unwrap().as_mut() {
             // If still recording, stop first.

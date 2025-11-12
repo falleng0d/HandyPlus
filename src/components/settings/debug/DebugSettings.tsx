@@ -6,6 +6,8 @@ import { AlwaysOnMicrophone } from "../AlwaysOnMicrophone";
 import { SoundPicker } from "../SoundPicker";
 import { PostProcessingToggle } from "../PostProcessingToggle";
 import { MuteWhileRecording } from "../MuteWhileRecording";
+import { LowerVolumeWhileRecordingToggle } from "../LowerVolumeWhileRecordingToggle";
+import { VolumeWhileRecordingSlider } from "../VolumeWhileRecordingSlider";
 
 export const DebugSettings: React.FC = () => {
   return (
@@ -20,6 +22,8 @@ export const DebugSettings: React.FC = () => {
         <AlwaysOnMicrophone descriptionMode="tooltip" grouped={true} />
         <PostProcessingToggle descriptionMode="tooltip" grouped={true} />
         <MuteWhileRecording descriptionMode="tooltip" grouped={true} />
+        <LowerVolumeWhileRecordingToggle descriptionMode="tooltip" grouped={true} />
+        <VolumeWhileRecordingSlider descriptionMode="tooltip" grouped={true} />
       </SettingsGroup>
     </div>
   );

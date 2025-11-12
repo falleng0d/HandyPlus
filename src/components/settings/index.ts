@@ -24,3 +24,5 @@ export { ModelUnloadTimeoutSetting } from "./ModelUnloadTimeout";
 export { StartHidden } from "./StartHidden";
 export { HistoryLimit } from "./HistoryLimit";
 export { AutostartToggle } from "./AutostartToggle";
+export { LowerVolumeWhileRecordingToggle } from "./LowerVolumeWhileRecordingToggle";
+export { VolumeWhileRecordingSlider } from "./VolumeWhileRecordingSlider";
