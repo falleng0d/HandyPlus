@@ -1,11 +1,15 @@
 use crate::audio_toolkit::{list_input_devices, vad::SmoothedVad, AudioRecorder, SileroVad};
 use crate::settings::get_settings;
 use crate::utils;
-use log::{debug, info};
+use log::{debug, info, warn};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tauri::Manager;
 use crate::managers::volume_controller::VolumeController;
+use std::process::Command;
+
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 
 const WHISPER_SAMPLE_RATE: usize = 16000;
 
@@ -125,6 +129,70 @@ impl AudioRecordingManager {
         *initial_volume_guard = None;
     }
 
+    /* ---------- script execution -------------------------------------------- */
+
+    fn execute_script(script: &str, context: &str) {
+        if script.is_empty() {
+            return;
+        }
+
+        let script = script.to_string();
+        let context = context.to_string();
+
+        // Execute the script in a separate thread to avoid blocking
+        std::thread::spawn(move || {
+            let result = if cfg!(target_os = "windows") {
+                const CREATE_NO_WINDOW: u32 = 0x08000000;
+                Command::new("pwsh")
+                    .args(&["-NoProfile", "-NoLogo", "-Command", &script])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .output()
+            } else {
+                Command::new("sh")
+                    .arg("-c")
+                    .arg(&script)
+                    .output()
+            };
+
+            match result {
+                Ok(output) => {
+                    if !output.status.success() {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        warn!("[{}] Execution failed with error: {}", context, stderr);
+                    } else {
+                        debug!("[{}] Executed script successfully", context);
+                    }
+                }
+                Err(e) => {
+                    warn!("[{}] Failed to execute script: {}", context, e);
+                }
+            }
+        });
+    }
+
+
+    pub fn execute_on_recording_start_script(&self) {
+        let settings = get_settings(&self.app_handle);
+        let script = settings.on_recording_start_script.trim().to_string();
+
+        if script.is_empty() {
+            return;
+        }
+
+        Self::execute_script(&script, "execute_on_recording_start_script");
+    }
+
+    pub fn execute_on_recording_end_script(&self) {
+        let settings = get_settings(&self.app_handle);
+        let script = settings.on_recording_end_script.trim().to_string();
+
+        if script.is_empty() {
+            return;
+        }
+
+        Self::execute_script(&script, "execute_on_recording_end_script");
+    }
+
     /* ---------- microphone life-cycle -------------------------------------- */
 
     pub fn start_microphone_stream(&self) -> Result<(), anyhow::Error> {
@@ -137,6 +205,7 @@ impl AudioRecordingManager {
         let start_time = Instant::now();
 
         self.set_recording_start_volume();
+        self.execute_on_recording_start_script();
 
         let vad_path = self
             .app_handle
@@ -295,6 +364,8 @@ impl AudioRecordingManager {
                 };
 
                 *self.is_recording.lock().unwrap() = false;
+
+                self.execute_on_recording_end_script();
 
                 // In on-demand mode turn the mic off again
                 if matches!(*self.mode.lock().unwrap(), MicrophoneMode::OnDemand) {

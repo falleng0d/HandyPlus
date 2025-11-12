@@ -201,6 +201,10 @@ pub struct AppSettings {
     pub lower_volume_while_recording: bool,
     #[serde(default = "default_volume_while_recording")]
     pub volume_while_recording: f32,
+    #[serde(default = "default_on_recording_start_script")]
+    pub on_recording_start_script: String,
+    #[serde(default = "default_on_recording_end_script")]
+    pub on_recording_end_script: String,
 }
 
 fn default_model() -> String {
@@ -327,6 +331,14 @@ fn default_volume_while_recording() -> f32 {
     0.3
 }
 
+fn default_on_recording_start_script() -> String {
+    String::new()
+}
+
+fn default_on_recording_end_script() -> String {
+    String::new()
+}
+
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
@@ -383,6 +395,8 @@ pub fn get_default_settings() -> AppSettings {
         mute_while_recording: false,
         lower_volume_while_recording: false,
         volume_while_recording: default_volume_while_recording(),
+        on_recording_start_script: default_on_recording_start_script(),
+        on_recording_end_script: default_on_recording_end_script(),
     }
 }
 

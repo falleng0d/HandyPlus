@@ -351,6 +351,22 @@ pub fn change_volume_while_recording_setting(app: AppHandle, volume: f32) -> Res
     Ok(())
 }
 
+#[tauri::command]
+pub fn change_on_recording_start_script_setting(app: AppHandle, script: String) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.on_recording_start_script = script;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn change_on_recording_end_script_setting(app: AppHandle, script: String) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.on_recording_end_script = script;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
 /// Generic helper to validate provider exists
 fn validate_provider_exists(
     settings: &settings::AppSettings,

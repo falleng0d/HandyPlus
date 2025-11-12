@@ -103,6 +103,8 @@ export const SettingsSchema = z.object({
   mute_while_recording: z.boolean().optional().default(false),
   lower_volume_while_recording: z.boolean().optional().default(false),
   volume_while_recording: z.number().optional().default(0.5),
+  on_recording_start_script: z.string().optional().default(""),
+  on_recording_end_script: z.string().optional().default(""),
 });
 
 export const BindingResponseSchema = z.object({

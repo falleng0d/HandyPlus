@@ -241,6 +241,8 @@ pub fn run() {
             shortcut::change_post_process_model_setting,
             shortcut::change_lower_volume_while_recording_setting,
             shortcut::change_volume_while_recording_setting,
+            shortcut::change_on_recording_start_script_setting,
+            shortcut::change_on_recording_end_script_setting,
             shortcut::set_post_process_provider,
             shortcut::fetch_post_process_models,
             shortcut::add_post_process_prompt,

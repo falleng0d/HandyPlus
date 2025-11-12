@@ -76,6 +76,8 @@ const DEFAULT_SETTINGS: Partial<Settings> = {
   mute_while_recording: false,
   lower_volume_while_recording: false,
   volume_while_recording: 0.5,
+  on_recording_start_script: "",
+  on_recording_end_script: "",
 };
 
 const DEFAULT_AUDIO_DEVICE: AudioDevice = {
@@ -134,6 +136,10 @@ const settingUpdaters: {
     invoke("change_lower_volume_while_recording_setting", { enabled: value }),
   volume_while_recording: (value) =>
     invoke("change_volume_while_recording_setting", { volume: value }),
+  on_recording_start_script: (value) =>
+    invoke("change_on_recording_start_script_setting", { script: value }),
+  on_recording_end_script: (value) =>
+    invoke("change_on_recording_end_script_setting", { script: value }),
 };
 
 export const useSettingsStore = create<SettingsStore>()(

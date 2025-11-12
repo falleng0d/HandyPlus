@@ -8,6 +8,8 @@ import { PostProcessingToggle } from "../PostProcessingToggle";
 import { MuteWhileRecording } from "../MuteWhileRecording";
 import { LowerVolumeWhileRecordingToggle } from "../LowerVolumeWhileRecordingToggle";
 import { VolumeWhileRecordingSlider } from "../VolumeWhileRecordingSlider";
+import { OnRecordingStartScriptInput } from "../OnRecordingStartScriptInput";
+import { OnRecordingEndScriptInput } from "../OnRecordingEndScriptInput";
 
 export const DebugSettings: React.FC = () => {
   return (
@@ -24,6 +26,8 @@ export const DebugSettings: React.FC = () => {
         <MuteWhileRecording descriptionMode="tooltip" grouped={true} />
         <LowerVolumeWhileRecordingToggle descriptionMode="tooltip" grouped={true} />
         <VolumeWhileRecordingSlider descriptionMode="tooltip" grouped={true} />
+        <OnRecordingStartScriptInput descriptionMode="tooltip" grouped={true} />
+        <OnRecordingEndScriptInput descriptionMode="tooltip" grouped={true} />
       </SettingsGroup>
     </div>
   );

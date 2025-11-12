@@ -26,3 +26,5 @@ export { HistoryLimit } from "./HistoryLimit";
 export { AutostartToggle } from "./AutostartToggle";
 export { LowerVolumeWhileRecordingToggle } from "./LowerVolumeWhileRecordingToggle";
 export { VolumeWhileRecordingSlider } from "./VolumeWhileRecordingSlider";
+export { OnRecordingStartScriptInput } from "./OnRecordingStartScriptInput";
+export { OnRecordingEndScriptInput } from "./OnRecordingEndScriptInput";
