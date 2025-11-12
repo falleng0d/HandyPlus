@@ -1,12 +1,11 @@
 use crate::audio_toolkit::{list_input_devices, vad::SmoothedVad, AudioRecorder, SileroVad};
 use crate::settings::get_settings;
 use crate::utils;
-use log::{debug, info, error};
+use log::{debug, info};
 use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::Instant;
-use rustfft::num_traits::ToPrimitive;
 use tauri::Manager;
+use crate::managers::volume_controller::VolumeController;
 
 const WHISPER_SAMPLE_RATE: usize = 16000;
 
@@ -49,31 +48,6 @@ fn create_audio_recorder(
     Ok(recorder)
 }
 
-fn safe_get_system_volume() -> u8 {
-    // std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-    //     cpvc::get_system_volume()
-    // })).unwrap_or_else(|_| {
-    //     error!("Failed to retrieve system volume, using default");
-    //     1.0.to_u8().unwrap()
-    // })
-    thread::spawn(|| { cpvc::get_system_volume() }).join().unwrap_or_else(|_| {
-        error!("Failed to get system volume");
-        0.5.to_u8().unwrap()
-    })
-}
-
-fn safe_set_system_volume(volume: u8) {
-    // std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-    //     cpvc::set_system_volume(volume);
-    // })).unwrap_or_else(|_| {
-    //     error!("Failed to set system volume to {}", volume);
-    // })
-    thread::spawn(move || { cpvc::set_system_volume(volume) }).join().unwrap_or_else(|_| {
-        eprintln!("Failed to set system volume to {}", volume);
-        false
-    });
-}
-
 /* ──────────────────────────────────────────────────────────────── */
 
 #[derive(Clone)]
@@ -86,6 +60,7 @@ pub struct AudioRecordingManager {
     is_open: Arc<Mutex<bool>>,
     is_recording: Arc<Mutex<bool>>,
     initial_volume: Arc<Mutex<Option<u8>>>,
+    volume_controller: VolumeController,
 }
 
 impl AudioRecordingManager {
@@ -108,6 +83,7 @@ impl AudioRecordingManager {
             is_open: Arc::new(Mutex::new(false)),
             is_recording: Arc::new(Mutex::new(false)),
             initial_volume: Arc::new(Mutex::new(None)),
+            volume_controller: VolumeController::new(),
         };
 
         // Always-on?  Open immediately.
@@ -133,8 +109,8 @@ impl AudioRecordingManager {
         let mut initial_volume_guard = self.initial_volume.lock().unwrap();
 
         if settings.mute_while_recording {
-            *initial_volume_guard = Some(safe_get_system_volume());
-            safe_set_system_volume(0);
+            *initial_volume_guard = Some(self.volume_controller.get_system_volume());
+            self.volume_controller.set_system_volume(0);
         } else {
             *initial_volume_guard = None;
         }
@@ -195,7 +171,7 @@ impl AudioRecordingManager {
 
         let mut initial_volume_guard = self.initial_volume.lock().unwrap();
         if let Some(vol) = *initial_volume_guard {
-            safe_set_system_volume(vol);
+            self.volume_controller.set_system_volume(vol);
         }
         *initial_volume_guard = None;
 
