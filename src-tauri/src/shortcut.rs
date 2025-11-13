@@ -1,7 +1,6 @@
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 use crate::actions::ACTION_MAP;
 use crate::settings::ShortcutBinding;
@@ -9,15 +8,239 @@ use crate::settings::{
     self, get_settings, ClipboardHandling, LLMPrompt, OverlayPosition, PasteMethod, SoundTheme,
 };
 use crate::ManagedToggleState;
+use rdev::{listen, Event, EventType, Key};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use once_cell::sync::OnceCell;
+
+static RUNTIME: OnceCell<Arc<Mutex<ShortcutRuntime>>> = OnceCell::new();
+
+#[derive(Default, Debug)]
+struct ShortcutRuntime {
+    // id -> binding
+    bindings_by_id: HashMap<String, ShortcutBinding>,
+    // normalized_combo -> id
+    combo_to_id: HashMap<String, String>,
+    // currently pressed modifiers (canonical: ctrl|shift|alt|meta)
+    pressed_mods: HashSet<String>,
+    // track pressed non-modifier keys to avoid repeats
+    pressed_keys: HashSet<String>,
+}
+
+fn get_runtime() -> &'static Arc<Mutex<ShortcutRuntime>> {
+    RUNTIME.get().expect("Shortcut runtime not initialized")
+}
+
+fn is_modifier_key(k: Key) -> Option<&'static str> {
+    match k {
+        Key::ControlLeft | Key::ControlRight => Some("ctrl"),
+        Key::ShiftLeft | Key::ShiftRight => Some("shift"),
+        Key::Alt | Key::AltGr => Some("alt"),
+        Key::MetaLeft | Key::MetaRight => Some("meta"),
+        _ => None,
+    }
+}
+
+#[allow(unreachable_patterns)]
+fn key_to_name(k: Key) -> Option<String> {
+    use Key::*;
+    let s = match k {
+        KeyA => "a",
+        KeyB => "b",
+        KeyC => "c",
+        KeyD => "d",
+        KeyE => "e",
+        KeyF => "f",
+        KeyG => "g",
+        KeyH => "h",
+        KeyI => "i",
+        KeyJ => "j",
+        KeyK => "k",
+        KeyL => "l",
+        KeyM => "m",
+        KeyN => "n",
+        KeyO => "o",
+        KeyP => "p",
+        KeyQ => "q",
+        KeyR => "r",
+        KeyS => "s",
+        KeyT => "t",
+        KeyU => "u",
+        KeyV => "v",
+        KeyW => "w",
+        KeyX => "x",
+        KeyY => "y",
+        KeyZ => "z",
+        Num1 => "1",
+        Num2 => "2",
+        Num3 => "3",
+        Num4 => "4",
+        Num5 => "5",
+        Num6 => "6",
+        Num7 => "7",
+        Num8 => "8",
+        Num9 => "9",
+        Num0 => "0",
+        Space => "space",
+        Enter => "enter",
+        Tab => "tab",
+        Escape => "escape",
+        F1 => "f1", F2 => "f2", F3 => "f3", F4 => "f4", F5 => "f5",
+        F6 => "f6", F7 => "f7", F8 => "f8", F9 => "f9", F10 => "f10",
+        F11 => "f11", F12 => "f12", F13 => "f13", F14 => "f14",
+        F15 => "f15", F16 => "f16", F17 => "f17", F18 => "f18",
+        F19 => "f19", F20 => "f20", F21 => "f21", F22 => "f22",
+        F23 => "f23", F24 => "f24",
+        Minus => "-",
+        Equal => "=",
+        LeftBracket => "[",
+        RightBracket => "]",
+        BackSlash => "\\",
+        Semicolon => ";",
+        Quote => "'",
+        Comma => ",",
+        Dot => ".",
+        Slash => "/",
+        BackQuote => "`",
+        Backspace => "backspace",
+        CapsLock => "capslock",
+        Home => "home",
+        End => "end",
+        PageUp => "pageup",
+        PageDown => "pagedown",
+        ArrowUp => "up",
+        ArrowDown => "down",
+        ArrowLeft => "left",
+        ArrowRight => "right",
+        Insert => "insert",
+        Delete => "delete",
+        _ => return None,
+    };
+    Some(s.to_string())
+}
+
+fn normalize_combo_from_parts(mods: &mut Vec<String>, key: &str) -> String {
+    mods.sort();
+    let mut parts = mods.clone();
+    parts.push(key.to_string());
+    parts.join("+")
+}
+
+fn normalize_shortcut_string(raw: &str) -> Result<String, String> {
+    let mut mods: Vec<String> = Vec::new();
+    let mut key: Option<String> = None;
+    for part in raw.split('+') {
+        let p = part.trim().to_lowercase();
+        let canon = match p.as_str() {
+            "control" => Some("ctrl"),
+            "ctrl" => Some("ctrl"),
+            "shift" => Some("shift"),
+            "alt" | "option" => Some("alt"),
+            "meta" | "command" | "cmd" | "super" | "win" | "windows" => Some("meta"),
+            _ => None,
+        };
+        if let Some(m) = canon {
+            mods.push(m.to_string());
+        } else {
+            if key.is_some() {
+                return Err("Shortcut must not contain more than one non-modifier key".into());
+            }
+            key = Some(p);
+        }
+    }
+    let key = key.ok_or_else(|| "Shortcut must contain a non-modifier key".to_string())?;
+    Ok(normalize_combo_from_parts(&mut mods, &key))
+}
 
 pub fn init_shortcuts(app: &AppHandle) {
-    let settings = settings::load_or_create_app_settings(app);
+    // Initialize runtime once
+    RUNTIME.get_or_init(|| Arc::new(Mutex::new(ShortcutRuntime::default())));
 
-    // Register shortcuts with the bindings from settings
-    for (_id, binding) in settings.bindings {
-        if let Err(e) = _register_shortcut(app, binding) {
-            eprintln!("Failed to register shortcut {} during init: {}", _id, e);
+    // Load settings and populate runtime
+    let settings = settings::load_or_create_app_settings(app);
+    {
+        let rt = get_runtime().clone();
+        let mut rt = rt.lock().unwrap();
+        rt.bindings_by_id.clear();
+        rt.combo_to_id.clear();
+        for (_id, binding) in settings.bindings.clone() {
+            if let Ok(combo) = normalize_shortcut_string(&binding.current_binding) {
+                // last writer wins for duplicates in settings
+                rt.combo_to_id.insert(combo, binding.id.clone());
+                rt.bindings_by_id.insert(binding.id.clone(), binding);
+            }
         }
+    }
+
+    // Spawn global listener thread once
+    let app_handle = app.clone();
+    thread::spawn(move || {
+        if let Err(e) = listen(move |event| {
+            handle_rdev_event(&app_handle, event);
+        }) {
+            eprintln!("Global key listener failed: {:?}", e);
+        }
+    });
+}
+
+fn handle_rdev_event(app: &AppHandle, event: Event) {
+    let rt_arc = get_runtime().clone();
+    let mut rt = rt_arc.lock().unwrap();
+    match event.event_type {
+        EventType::KeyPress(k) => {
+            if let Some(mod_name) = is_modifier_key(k) {
+                rt.pressed_mods.insert(mod_name.to_string());
+            } else if let Some(key_name) = key_to_name(k) {
+                if rt.pressed_keys.insert(key_name.clone()) {
+                    // newly pressed non-modifier key
+                    let mut mods: Vec<String> = rt.pressed_mods.iter().cloned().collect();
+                    let combo = normalize_combo_from_parts(&mut mods, &key_name);
+                    if let Some(binding_id) = rt.combo_to_id.get(&combo).cloned() {
+                        let shortcut_string = combo.clone();
+                        let settings = get_settings(app);
+                        if let Some(action) = ACTION_MAP.get(&binding_id) {
+                            if settings.push_to_talk {
+                                action.start(app, &binding_id, &shortcut_string);
+                            } else {
+                                // toggle behavior
+                                let toggle_state_manager = app.state::<ManagedToggleState>();
+                                let mut states = toggle_state_manager.lock().expect("Failed to lock toggle state manager");
+                                let is_active = states.active_toggles.entry(binding_id.clone()).or_insert(false);
+                                if *is_active {
+                                    action.stop(app, &binding_id, &shortcut_string);
+                                    *is_active = false;
+                                } else {
+                                    action.start(app, &binding_id, &shortcut_string);
+                                    *is_active = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        EventType::KeyRelease(k) => {
+            if let Some(mod_name) = is_modifier_key(k) {
+                rt.pressed_mods.remove(mod_name);
+            } else if let Some(key_name) = key_to_name(k) {
+                if rt.pressed_keys.remove(&key_name) {
+                    // was pressed; handle PTT stop
+                    let mut mods: Vec<String> = rt.pressed_mods.iter().cloned().collect();
+                    let combo = normalize_combo_from_parts(&mut mods, &key_name);
+                    if let Some(binding_id) = rt.combo_to_id.get(&combo).cloned() {
+                        let shortcut_string = combo.clone();
+                        let settings = get_settings(app);
+                        if settings.push_to_talk {
+                            if let Some(action) = ACTION_MAP.get(&binding_id) {
+                                action.stop(app, &binding_id, &shortcut_string);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
     }
 }
 
@@ -695,7 +918,7 @@ pub fn resume_binding(app: AppHandle, id: String) -> Result<(), String> {
     Ok(())
 }
 
-fn _register_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(), String> {
+fn _register_shortcut(_app: &AppHandle, binding: ShortcutBinding) -> Result<(), String> {
     // Validate human-level rules first
     if let Err(e) = validate_shortcut_string(&binding.current_binding) {
         eprintln!(
@@ -705,103 +928,42 @@ fn _register_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(), S
         return Err(e);
     }
 
-    // Parse shortcut and return error if it fails
-    let shortcut = match binding.current_binding.parse::<Shortcut>() {
-        Ok(s) => s,
-        Err(e) => {
-            let error_msg = format!(
-                "Failed to parse shortcut '{}': {}",
-                binding.current_binding, e
-            );
-            eprintln!("_register_shortcut parse error: {}", error_msg);
+    // Normalize combo
+    let combo = normalize_shortcut_string(&binding.current_binding)?;
+
+    // Update runtime maps
+    let rt_arc = get_runtime().clone();
+    let mut rt = rt_arc.lock().unwrap();
+
+    // Check duplicates: same combo already mapped to a different id
+    if let Some(existing_id) = rt.combo_to_id.get(&combo) {
+        if existing_id != &binding.id {
+            let error_msg = format!("Shortcut '{}' is already in use", binding.current_binding);
+            eprintln!("_register_shortcut duplicate error: {}", error_msg);
             return Err(error_msg);
         }
-    };
-
-    // Prevent duplicate registrations that would silently shadow one another
-    if app.global_shortcut().is_registered(shortcut) {
-        let error_msg = format!("Shortcut '{}' is already in use", binding.current_binding);
-        eprintln!("_register_shortcut duplicate error: {}", error_msg);
-        return Err(error_msg);
     }
 
-    // Clone binding.id for use in the closure
-    let binding_id_for_closure = binding.id.clone();
-
-    app.global_shortcut()
-        .on_shortcut(shortcut, move |ah, scut, event| {
-            if scut == &shortcut {
-                let shortcut_string = scut.into_string();
-                let settings = get_settings(ah);
-
-                if let Some(action) = ACTION_MAP.get(&binding_id_for_closure) {
-                    if settings.push_to_talk {
-                        if event.state == ShortcutState::Pressed {
-                            action.start(ah, &binding_id_for_closure, &shortcut_string);
-                        } else if event.state == ShortcutState::Released {
-                            action.stop(ah, &binding_id_for_closure, &shortcut_string);
-                        }
-                    } else {
-                        if event.state == ShortcutState::Pressed {
-                            let toggle_state_manager = ah.state::<ManagedToggleState>();
-
-                            let mut states = toggle_state_manager.lock().expect("Failed to lock toggle state manager");
-
-                            let is_currently_active = states.active_toggles
-                                .entry(binding_id_for_closure.clone())
-                                .or_insert(false);
-
-                            if *is_currently_active {
-                                action.stop(
-                                    ah,
-                                    &binding_id_for_closure,
-                                    &shortcut_string,
-                                );
-                                *is_currently_active = false; // Update state to inactive
-                            } else {
-                                action.start(ah, &binding_id_for_closure, &shortcut_string);
-                                *is_currently_active = true; // Update state to active
-                            }
-                        }
-                    }
-                } else {
-                    println!(
-                        "Warning: No action defined in ACTION_MAP for shortcut ID '{}'. Shortcut: '{}', State: {:?}",
-                        binding_id_for_closure, shortcut_string, event.state
-                    );
-                }
-            }
-        })
-        .map_err(|e| {
-            let error_msg = format!("Couldn't register shortcut '{}': {}", binding.current_binding, e);
-            eprintln!("_register_shortcut registration error: {}", error_msg);
-            error_msg
-        })?;
+    rt.combo_to_id.insert(combo, binding.id.clone());
+    rt.bindings_by_id.insert(binding.id.clone(), binding);
 
     Ok(())
 }
 
-fn _unregister_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(), String> {
-    let shortcut = match binding.current_binding.parse::<Shortcut>() {
-        Ok(s) => s,
-        Err(e) => {
-            let error_msg = format!(
-                "Failed to parse shortcut '{}' for unregistration: {}",
-                binding.current_binding, e
-            );
-            eprintln!("_unregister_shortcut parse error: {}", error_msg);
-            return Err(error_msg);
-        }
-    };
+fn _unregister_shortcut(_app: &AppHandle, binding: ShortcutBinding) -> Result<(), String> {
+    let combo = normalize_shortcut_string(&binding.current_binding)?;
+    let rt_arc = get_runtime().clone();
+    let mut rt = rt_arc.lock().unwrap();
 
-    app.global_shortcut().unregister(shortcut).map_err(|e| {
-        let error_msg = format!(
-            "Failed to unregister shortcut '{}': {}",
-            binding.current_binding, e
-        );
-        eprintln!("_unregister_shortcut error: {}", error_msg);
-        error_msg
-    })?;
+    // Remove combo mapping if it points to this id
+    if let Some(existing_id) = rt.combo_to_id.get(&combo) {
+        if existing_id == &binding.id {
+            rt.combo_to_id.remove(&combo);
+        }
+    }
+
+    // Remove binding by id
+    rt.bindings_by_id.remove(&binding.id);
 
     Ok(())
 }
