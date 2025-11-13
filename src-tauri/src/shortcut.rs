@@ -3,12 +3,16 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::actions::ACTION_MAP;
+use crate::hotkey::{
+    is_modifier_key, key_to_name, normalize_combo_from_parts, normalize_shortcut_string,
+    validate_shortcut_string,
+};
 use crate::settings::ShortcutBinding;
 use crate::settings::{
     self, get_settings, ClipboardHandling, LLMPrompt, OverlayPosition, PasteMethod, SoundTheme,
 };
 use crate::ManagedToggleState;
-use rdev::{listen, Event, EventType, Key};
+use rdev::{listen, Event, EventType};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -30,127 +34,6 @@ struct ShortcutRuntime {
 
 fn get_runtime() -> &'static Arc<Mutex<ShortcutRuntime>> {
     RUNTIME.get().expect("Shortcut runtime not initialized")
-}
-
-fn is_modifier_key(k: Key) -> Option<&'static str> {
-    match k {
-        Key::ControlLeft | Key::ControlRight => Some("ctrl"),
-        Key::ShiftLeft | Key::ShiftRight => Some("shift"),
-        Key::Alt | Key::AltGr => Some("alt"),
-        Key::MetaLeft | Key::MetaRight => Some("meta"),
-        _ => None,
-    }
-}
-
-#[allow(unreachable_patterns)]
-fn key_to_name(k: Key) -> Option<String> {
-    use Key::*;
-    let s = match k {
-        KeyA => "a",
-        KeyB => "b",
-        KeyC => "c",
-        KeyD => "d",
-        KeyE => "e",
-        KeyF => "f",
-        KeyG => "g",
-        KeyH => "h",
-        KeyI => "i",
-        KeyJ => "j",
-        KeyK => "k",
-        KeyL => "l",
-        KeyM => "m",
-        KeyN => "n",
-        KeyO => "o",
-        KeyP => "p",
-        KeyQ => "q",
-        KeyR => "r",
-        KeyS => "s",
-        KeyT => "t",
-        KeyU => "u",
-        KeyV => "v",
-        KeyW => "w",
-        KeyX => "x",
-        KeyY => "y",
-        KeyZ => "z",
-        Num1 => "1",
-        Num2 => "2",
-        Num3 => "3",
-        Num4 => "4",
-        Num5 => "5",
-        Num6 => "6",
-        Num7 => "7",
-        Num8 => "8",
-        Num9 => "9",
-        Num0 => "0",
-        Space => "space",
-        Enter => "enter",
-        Tab => "tab",
-        Escape => "escape",
-        F1 => "f1", F2 => "f2", F3 => "f3", F4 => "f4", F5 => "f5",
-        F6 => "f6", F7 => "f7", F8 => "f8", F9 => "f9", F10 => "f10",
-        F11 => "f11", F12 => "f12", F13 => "f13", F14 => "f14",
-        F15 => "f15", F16 => "f16", F17 => "f17", F18 => "f18",
-        F19 => "f19", F20 => "f20", F21 => "f21", F22 => "f22",
-        F23 => "f23", F24 => "f24",
-        Minus => "-",
-        Equal => "=",
-        LeftBracket => "[",
-        RightBracket => "]",
-        BackSlash => "\\",
-        Semicolon => ";",
-        Quote => "'",
-        Comma => ",",
-        Dot => ".",
-        Slash => "/",
-        BackQuote => "`",
-        Backspace => "backspace",
-        CapsLock => "capslock",
-        Home => "home",
-        End => "end",
-        PageUp => "pageup",
-        PageDown => "pagedown",
-        ArrowUp => "up",
-        ArrowDown => "down",
-        ArrowLeft => "left",
-        ArrowRight => "right",
-        Insert => "insert",
-        Delete => "delete",
-        _ => return None,
-    };
-    Some(s.to_string())
-}
-
-fn normalize_combo_from_parts(mods: &mut Vec<String>, key: &str) -> String {
-    mods.sort();
-    let mut parts = mods.clone();
-    parts.push(key.to_string());
-    parts.join("+")
-}
-
-fn normalize_shortcut_string(raw: &str) -> Result<String, String> {
-    let mut mods: Vec<String> = Vec::new();
-    let mut key: Option<String> = None;
-    for part in raw.split('+') {
-        let p = part.trim().to_lowercase();
-        let canon = match p.as_str() {
-            "control" => Some("ctrl"),
-            "ctrl" => Some("ctrl"),
-            "shift" => Some("shift"),
-            "alt" | "option" => Some("alt"),
-            "meta" | "command" | "cmd" | "super" | "win" | "windows" => Some("meta"),
-            _ => None,
-        };
-        if let Some(m) = canon {
-            mods.push(m.to_string());
-        } else {
-            if key.is_some() {
-                return Err("Shortcut must not contain more than one non-modifier key".into());
-            }
-            key = Some(p);
-        }
-    }
-    let key = key.ok_or_else(|| "Shortcut must contain a non-modifier key".to_string())?;
-    Ok(normalize_combo_from_parts(&mut mods, &key))
 }
 
 pub fn init_shortcuts(app: &AppHandle) {
@@ -257,7 +140,7 @@ pub fn change_binding(
     id: String,
     binding: String,
 ) -> Result<BindingResponse, String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
 
     // Get the binding to modify
     let binding_to_modify = match settings.bindings.get(&id) {
@@ -318,12 +201,12 @@ pub fn change_binding(
 pub fn reset_binding(app: AppHandle, id: String) -> Result<BindingResponse, String> {
     let binding = settings::get_stored_binding(&app, &id);
 
-    return change_binding(app, id, binding.default_binding);
+    change_binding(app, id, binding.default_binding)
 }
 
 #[tauri::command]
 pub fn change_ptt_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
 
     // TODO if the setting is currently false, we probably want to
     // cancel any ongoing recordings or actions
@@ -336,7 +219,7 @@ pub fn change_ptt_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
 
 #[tauri::command]
 pub fn change_audio_feedback_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     settings.audio_feedback = enabled;
     settings::write_settings(&app, settings);
     Ok(())
@@ -344,7 +227,7 @@ pub fn change_audio_feedback_setting(app: AppHandle, enabled: bool) -> Result<()
 
 #[tauri::command]
 pub fn change_audio_feedback_volume_setting(app: AppHandle, volume: f32) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     settings.audio_feedback_volume = volume;
     settings::write_settings(&app, settings);
     Ok(())
@@ -352,7 +235,7 @@ pub fn change_audio_feedback_volume_setting(app: AppHandle, volume: f32) -> Resu
 
 #[tauri::command]
 pub fn change_sound_theme_setting(app: AppHandle, theme: String) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     let parsed = match theme.as_str() {
         "marimba" => SoundTheme::Marimba,
         "pop" => SoundTheme::Pop,
@@ -369,7 +252,7 @@ pub fn change_sound_theme_setting(app: AppHandle, theme: String) -> Result<(), S
 
 #[tauri::command]
 pub fn change_translate_to_english_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     settings.translate_to_english = enabled;
     settings::write_settings(&app, settings);
     Ok(())
@@ -377,7 +260,7 @@ pub fn change_translate_to_english_setting(app: AppHandle, enabled: bool) -> Res
 
 #[tauri::command]
 pub fn change_selected_language_setting(app: AppHandle, language: String) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     settings.selected_language = language;
     settings::write_settings(&app, settings);
     Ok(())
@@ -385,7 +268,7 @@ pub fn change_selected_language_setting(app: AppHandle, language: String) -> Res
 
 #[tauri::command]
 pub fn change_overlay_position_setting(app: AppHandle, position: String) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     let parsed = match position.as_str() {
         "none" => OverlayPosition::None,
         "top" => OverlayPosition::Top,
@@ -406,7 +289,7 @@ pub fn change_overlay_position_setting(app: AppHandle, position: String) -> Resu
 
 #[tauri::command]
 pub fn change_debug_mode_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     settings.debug_mode = enabled;
     settings::write_settings(&app, settings);
 
@@ -424,7 +307,7 @@ pub fn change_debug_mode_setting(app: AppHandle, enabled: bool) -> Result<(), St
 
 #[tauri::command]
 pub fn change_start_hidden_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     settings.start_hidden = enabled;
     settings::write_settings(&app, settings);
 
@@ -442,7 +325,7 @@ pub fn change_start_hidden_setting(app: AppHandle, enabled: bool) -> Result<(), 
 
 #[tauri::command]
 pub fn change_autostart_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     settings.autostart_enabled = enabled;
     settings::write_settings(&app, settings);
 
@@ -468,7 +351,7 @@ pub fn change_autostart_setting(app: AppHandle, enabled: bool) -> Result<(), Str
 
 #[tauri::command]
 pub fn update_custom_words(app: AppHandle, words: Vec<String>) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     settings.custom_words = words;
     settings::write_settings(&app, settings);
     Ok(())
@@ -479,7 +362,7 @@ pub fn change_word_correction_threshold_setting(
     app: AppHandle,
     threshold: f64,
 ) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     settings.word_correction_threshold = threshold;
     settings::write_settings(&app, settings);
     Ok(())
@@ -487,7 +370,7 @@ pub fn change_word_correction_threshold_setting(
 
 #[tauri::command]
 pub fn change_paste_method_setting(app: AppHandle, method: String) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     let parsed = match method.as_str() {
         "ctrl_v" => PasteMethod::CtrlV,
         "direct" => PasteMethod::Direct,
@@ -505,7 +388,7 @@ pub fn change_paste_method_setting(app: AppHandle, method: String) -> Result<(),
 
 #[tauri::command]
 pub fn change_clipboard_handling_setting(app: AppHandle, handling: String) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     let parsed = match handling.as_str() {
         "dont_modify" => ClipboardHandling::DontModify,
         "copy_to_clipboard" => ClipboardHandling::CopyToClipboard,
@@ -524,7 +407,7 @@ pub fn change_clipboard_handling_setting(app: AppHandle, handling: String) -> Re
 
 #[tauri::command]
 pub fn change_post_process_enabled_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     settings.post_process_enabled = enabled;
     settings::write_settings(&app, settings);
     Ok(())
@@ -536,7 +419,7 @@ pub fn change_post_process_base_url_setting(
     provider_id: String,
     base_url: String,
 ) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     let label = settings
         .post_process_provider(&provider_id)
         .map(|provider| provider.label.clone())
@@ -611,7 +494,7 @@ pub fn change_post_process_api_key_setting(
     provider_id: String,
     api_key: String,
 ) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     validate_provider_exists(&settings, &provider_id)?;
     settings.post_process_api_keys.insert(provider_id, api_key);
     settings::write_settings(&app, settings);
@@ -624,7 +507,7 @@ pub fn change_post_process_model_setting(
     provider_id: String,
     model: String,
 ) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     validate_provider_exists(&settings, &provider_id)?;
     settings.post_process_models.insert(provider_id, model);
     settings::write_settings(&app, settings);
@@ -633,7 +516,7 @@ pub fn change_post_process_model_setting(
 
 #[tauri::command]
 pub fn set_post_process_provider(app: AppHandle, provider_id: String) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     validate_provider_exists(&settings, &provider_id)?;
     settings.post_process_provider_id = provider_id;
     settings::write_settings(&app, settings);
@@ -646,7 +529,7 @@ pub fn add_post_process_prompt(
     name: String,
     prompt: String,
 ) -> Result<LLMPrompt, String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
 
     // Generate unique ID using timestamp and random component
     let id = format!("prompt_{}", chrono::Utc::now().timestamp_millis());
@@ -670,7 +553,7 @@ pub fn update_post_process_prompt(
     name: String,
     prompt: String,
 ) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
 
     if let Some(existing_prompt) = settings
         .post_process_prompts
@@ -688,7 +571,7 @@ pub fn update_post_process_prompt(
 
 #[tauri::command]
 pub fn delete_post_process_prompt(app: AppHandle, id: String) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
 
     // Don't allow deleting the last prompt
     if settings.post_process_prompts.len() <= 1 {
@@ -718,7 +601,7 @@ pub async fn fetch_post_process_models(
     app: AppHandle,
     provider_id: String,
 ) -> Result<Vec<String>, String> {
-    let settings = settings::get_settings(&app);
+    let settings = get_settings(&app);
 
     // Find the provider
     let provider = settings
@@ -854,7 +737,7 @@ async fn fetch_models_manual(
 
 #[tauri::command]
 pub fn set_post_process_selected_prompt(app: AppHandle, id: String) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
 
     // Verify the prompt exists
     if !settings.post_process_prompts.iter().any(|p| p.id == id) {
@@ -868,30 +751,14 @@ pub fn set_post_process_selected_prompt(app: AppHandle, id: String) -> Result<()
 
 #[tauri::command]
 pub fn change_mute_while_recording_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
+    let mut settings = get_settings(&app);
     settings.mute_while_recording = enabled;
     settings::write_settings(&app, settings);
 
     Ok(())
 }
 
-/// Determine whether a shortcut string contains at least one non-modifier key.
-/// We allow single non-modifier keys (e.g. "f5" or "space") but disallow
-/// modifier-only combos (e.g. "ctrl" or "ctrl+shift").
-fn validate_shortcut_string(raw: &str) -> Result<(), String> {
-    let modifiers = [
-        "ctrl", "control", "shift", "alt", "option", "meta", "command", "cmd", "super", "win",
-        "windows",
-    ];
-    let has_non_modifier = raw
-        .split('+')
-        .any(|part| !modifiers.contains(&part.trim().to_lowercase().as_str()));
-    if has_non_modifier {
-        Ok(())
-    } else {
-        Err("Shortcut must contain at least one non-modifier key".into())
-    }
-}
+
 
 /// Temporarily unregister a binding while the user is editing it in the UI.
 /// This avoids firing the action while keys are being recorded.
