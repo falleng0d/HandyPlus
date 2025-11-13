@@ -4,8 +4,8 @@ use tauri_plugin_autostart::ManagerExt;
 
 use crate::actions::ACTION_MAP;
 use crate::hotkey::{
-    is_modifier_key, key_to_name, normalize_combo_from_parts, normalize_shortcut_string,
-    validate_shortcut_string,
+    is_modifier_key, key_to_name, modifier_key_to_specific_name, normalize_combo_from_parts,
+    normalize_shortcut_string, validate_shortcut_string,
 };
 use crate::settings::ShortcutBinding;
 use crate::settings::{
@@ -30,6 +30,8 @@ struct ShortcutRuntime {
     pressed_mods: HashSet<String>,
     // track pressed non-modifier keys to avoid repeats
     pressed_keys: HashSet<String>,
+    // track pressed modifier keys (specific: "left ctrl", "right shift", etc.) to avoid repeats
+    pressed_modifier_keys: HashSet<String>,
 }
 
 fn get_runtime() -> &'static Arc<Mutex<ShortcutRuntime>> {
@@ -71,59 +73,112 @@ fn handle_rdev_event(app: &AppHandle, event: Event) {
     let rt_arc = get_runtime().clone();
     let mut rt = rt_arc.lock().unwrap();
     match event.event_type {
-        EventType::KeyPress(k) => {
-            if let Some(mod_name) = is_modifier_key(k) {
-                rt.pressed_mods.insert(mod_name.to_string());
-            } else if let Some(key_name) = key_to_name(k) {
-                if rt.pressed_keys.insert(key_name.clone()) {
-                    // newly pressed non-modifier key
-                    let mut mods: Vec<String> = rt.pressed_mods.iter().cloned().collect();
-                    let combo = normalize_combo_from_parts(&mut mods, &key_name);
-                    if let Some(binding_id) = rt.combo_to_id.get(&combo).cloned() {
-                        let shortcut_string = combo.clone();
-                        let settings = get_settings(app);
-                        if let Some(action) = ACTION_MAP.get(&binding_id) {
-                            if settings.push_to_talk {
-                                action.start(app, &binding_id, &shortcut_string);
-                            } else {
-                                // toggle behavior
-                                let toggle_state_manager = app.state::<ManagedToggleState>();
-                                let mut states = toggle_state_manager.lock().expect("Failed to lock toggle state manager");
-                                let is_active = states.active_toggles.entry(binding_id.clone()).or_insert(false);
-                                if *is_active {
-                                    action.stop(app, &binding_id, &shortcut_string);
-                                    *is_active = false;
-                                } else {
-                                    action.start(app, &binding_id, &shortcut_string);
-                                    *is_active = true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        EventType::KeyRelease(k) => {
-            if let Some(mod_name) = is_modifier_key(k) {
-                rt.pressed_mods.remove(mod_name);
-            } else if let Some(key_name) = key_to_name(k) {
-                if rt.pressed_keys.remove(&key_name) {
-                    // was pressed; handle PTT stop
-                    let mut mods: Vec<String> = rt.pressed_mods.iter().cloned().collect();
-                    let combo = normalize_combo_from_parts(&mut mods, &key_name);
-                    if let Some(binding_id) = rt.combo_to_id.get(&combo).cloned() {
-                        let shortcut_string = combo.clone();
-                        let settings = get_settings(app);
-                        if settings.push_to_talk {
-                            if let Some(action) = ACTION_MAP.get(&binding_id) {
-                                action.stop(app, &binding_id, &shortcut_string);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        EventType::KeyPress(k) => on_rdev_key_press_event(app, &mut rt, k),
+        EventType::KeyRelease(k) => on_rdev_key_release_event(app, &mut rt, k),
         _ => {}
+    }
+}
+
+/// Handle a key press event from rdev
+fn on_rdev_key_press_event(app: &AppHandle, rt: &mut ShortcutRuntime, k: rdev::Key) {
+    if let Some(mod_name) = is_modifier_key(k) {
+        on_modifier_key_press(app, rt, k, mod_name);
+    } else if let Some(key_name) = key_to_name(k) {
+        on_regular_key_press(app, rt, key_name);
+    }
+}
+
+/// Handle a key release event from rdev
+fn on_rdev_key_release_event(app: &AppHandle, rt: &mut ShortcutRuntime, k: rdev::Key) {
+    if let Some(mod_name) = is_modifier_key(k) {
+        on_modifier_key_release(app, rt, k, mod_name);
+    } else if let Some(key_name) = key_to_name(k) {
+        on_regular_key_release(app, rt, key_name);
+    }
+}
+
+/// Handle a modifier key press (e.g., Ctrl, Shift, Alt, Meta)
+fn on_modifier_key_press(app: &AppHandle, rt: &mut ShortcutRuntime, k: rdev::Key, mod_name: &str) {
+    // Track this modifier as pressed
+    rt.pressed_mods.insert(mod_name.to_string());
+
+    // Check if this modifier key itself is a registered shortcut
+    if let Some(specific_mod_name) = modifier_key_to_specific_name(k) {
+        if rt.pressed_modifier_keys.insert(specific_mod_name.clone()) {
+            // Newly pressed modifier key - check if it's registered as a shortcut
+            trigger_shortcut_if_registered(app, rt, &specific_mod_name);
+        }
+    }
+}
+
+/// Handle a regular (non-modifier) key press
+fn on_regular_key_press(app: &AppHandle, rt: &mut ShortcutRuntime, key_name: String) {
+    if rt.pressed_keys.insert(key_name.clone()) {
+        // Newly pressed non-modifier key
+        let mut mods: Vec<String> = rt.pressed_mods.iter().cloned().collect();
+        let combo = normalize_combo_from_parts(&mut mods, &key_name);
+        trigger_shortcut_if_registered(app, rt, &combo);
+    }
+}
+
+/// Handle a modifier key release (e.g., Ctrl, Shift, Alt, Meta)
+fn on_modifier_key_release(app: &AppHandle, rt: &mut ShortcutRuntime, k: rdev::Key, mod_name: &str) {
+    rt.pressed_mods.remove(mod_name);
+
+    // Check if this modifier key was registered as a shortcut
+    if let Some(specific_mod_name) = modifier_key_to_specific_name(k) {
+        if rt.pressed_modifier_keys.remove(&specific_mod_name) {
+            // Was pressed; handle PTT stop for modifier shortcuts
+            stop_shortcut_if_registered_ptt(app, rt, &specific_mod_name);
+        }
+    }
+}
+
+/// Handle a regular (non-modifier) key release
+fn on_regular_key_release(app: &AppHandle, rt: &mut ShortcutRuntime, key_name: String) {
+    if rt.pressed_keys.remove(&key_name) {
+        // Was pressed; handle PTT stop
+        let mut mods: Vec<String> = rt.pressed_mods.iter().cloned().collect();
+        let combo = normalize_combo_from_parts(&mut mods, &key_name);
+        stop_shortcut_if_registered_ptt(app, rt, &combo);
+    }
+}
+
+/// Trigger a shortcut action if it's registered (handles both PTT and toggle modes)
+fn trigger_shortcut_if_registered(app: &AppHandle, rt: &ShortcutRuntime, combo: &str) {
+    if let Some(binding_id) = rt.combo_to_id.get(combo).cloned() {
+        let shortcut_string = combo.to_string();
+        let settings = get_settings(app);
+        if let Some(action) = ACTION_MAP.get(&binding_id) {
+            if settings.push_to_talk {
+                action.start(app, &binding_id, &shortcut_string);
+            } else {
+                // toggle behavior
+                let toggle_state_manager = app.state::<ManagedToggleState>();
+                let mut states = toggle_state_manager.lock().expect("Failed to lock toggle state manager");
+                let is_active = states.active_toggles.entry(binding_id.clone()).or_insert(false);
+                if *is_active {
+                    action.stop(app, &binding_id, &shortcut_string);
+                    *is_active = false;
+                } else {
+                    action.start(app, &binding_id, &shortcut_string);
+                    *is_active = true;
+                }
+            }
+        }
+    }
+}
+
+/// Stop a shortcut action if it's registered and in PTT mode
+fn stop_shortcut_if_registered_ptt(app: &AppHandle, rt: &ShortcutRuntime, combo: &str) {
+    if let Some(binding_id) = rt.combo_to_id.get(combo).cloned() {
+        let shortcut_string = combo.to_string();
+        let settings = get_settings(app);
+        if settings.push_to_talk {
+            if let Some(action) = ACTION_MAP.get(&binding_id) {
+                action.stop(app, &binding_id, &shortcut_string);
+            }
+        }
     }
 }
 
