@@ -56,16 +56,16 @@ export const getKeyName = (
     };
 
     const modifierMap: Record<string, string> = {
-      ShiftLeft: getModifierName("shift"),
-      ShiftRight: getModifierName("shift"),
-      ControlLeft: getModifierName("ctrl"),
-      ControlRight: getModifierName("ctrl"),
-      AltLeft: getModifierName("alt"),
-      AltRight: getModifierName("alt"),
-      MetaLeft: getModifierName("meta"),
-      MetaRight: getModifierName("meta"),
-      OSLeft: getModifierName("meta"),
-      OSRight: getModifierName("meta"),
+      ShiftLeft: "left " + getModifierName("shift"),
+      ShiftRight: "right " + getModifierName("shift"),
+      ControlLeft: "left " + getModifierName("ctrl"),
+      ControlRight: "right " + getModifierName("ctrl"),
+      AltLeft: "left " + getModifierName("alt"),
+      AltRight: "right " + getModifierName("alt"),
+      MetaLeft: "left " + getModifierName("meta"),
+      MetaRight: "right " + getModifierName("meta"),
+      OSLeft: "left " + getModifierName("meta"),
+      OSRight: "right " + getModifierName("meta"),
       CapsLock: "caps lock",
       Tab: "tab",
       Enter: "enter",
@@ -168,16 +168,11 @@ export const formatKeyCombination = (
 };
 
 /**
- * Normalize modifier keys to handle left/right variants
+ * Normalize modifier keys - now preserves left/right variants
+ * This allows users to distinguish between left alt and right alt, etc.
  */
 export const normalizeKey = (key: string): string => {
-  // Handle left/right variants of modifier keys
-  if (key.startsWith("left ") || key.startsWith("right ")) {
-    const parts = key.split(" ");
-    if (parts.length === 2) {
-      // Return just the modifier name without left/right prefix
-      return parts[1];
-    }
-  }
+  // Keep the key as-is, including left/right variants
+  // This allows "left alt" and "right alt" to be treated as different keys
   return key;
 };
