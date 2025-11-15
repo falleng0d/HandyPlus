@@ -1,12 +1,12 @@
 use crate::audio_toolkit::{list_input_devices, vad::SmoothedVad, AudioRecorder, SileroVad};
+use crate::managers::volume_controller::VolumeController;
 use crate::settings::get_settings;
 use crate::utils;
 use log::{debug, info, warn};
+use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tauri::Manager;
-use crate::managers::volume_controller::VolumeController;
-use std::process::Command;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -110,12 +110,15 @@ impl AudioRecordingManager {
             return;
         } else if settings.lower_volume_while_recording {
             let current_vol = Some(self.volume_controller.get_system_volume());
-            if current_vol.is_none() || current_vol.unwrap() <= (settings.volume_while_recording * 100.0) as u8 {
+            if current_vol.is_none()
+                || current_vol.unwrap() <= (settings.volume_while_recording * 100.0) as u8
+            {
                 return;
             }
 
             *initial_volume_guard = current_vol;
-            self.volume_controller.set_system_volume((settings.volume_while_recording * 100.0) as u8);
+            self.volume_controller
+                .set_system_volume((settings.volume_while_recording * 100.0) as u8);
         } else {
             *initial_volume_guard = None;
         };
@@ -148,10 +151,7 @@ impl AudioRecordingManager {
                     .creation_flags(CREATE_NO_WINDOW)
                     .output()
             } else {
-                Command::new("sh")
-                    .arg("-c")
-                    .arg(&script)
-                    .output()
+                Command::new("sh").arg("-c").arg(&script).output()
             };
 
             match result {
@@ -169,7 +169,6 @@ impl AudioRecordingManager {
             }
         });
     }
-
 
     pub fn execute_on_recording_start_script(&self) {
         let settings = get_settings(&self.app_handle);
