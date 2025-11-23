@@ -75,12 +75,30 @@ pub fn key_to_name(k: Key) -> Option<String> {
         Return => "enter",
         Tab => "tab",
         Escape => "escape",
-        F1 => "f1", F2 => "f2", F3 => "f3", F4 => "f4", F5 => "f5",
-        F6 => "f6", F7 => "f7", F8 => "f8", F9 => "f9", F10 => "f10",
-        F11 => "f11", F12 => "f12", F13 => "f13", F14 => "f14",
-        F15 => "f15", F16 => "f16", F17 => "f17", F18 => "f18",
-        F19 => "f19", F20 => "f20", F21 => "f21", F22 => "f22",
-        F23 => "f23", F24 => "f24",
+        F1 => "f1",
+        F2 => "f2",
+        F3 => "f3",
+        F4 => "f4",
+        F5 => "f5",
+        F6 => "f6",
+        F7 => "f7",
+        F8 => "f8",
+        F9 => "f9",
+        F10 => "f10",
+        F11 => "f11",
+        F12 => "f12",
+        F13 => "f13",
+        F14 => "f14",
+        F15 => "f15",
+        F16 => "f16",
+        F17 => "f17",
+        F18 => "f18",
+        F19 => "f19",
+        F20 => "f20",
+        F21 => "f21",
+        F22 => "f22",
+        F23 => "f23",
+        F24 => "f24",
         Minus => "-",
         Equal => "=",
         LeftBracket => "[",
@@ -121,12 +139,37 @@ pub fn normalize_combo_from_parts(mods: &mut Vec<String>, key: &str) -> String {
 fn is_modifier_name(s: &str) -> bool {
     matches!(
         s,
-        "ctrl" | "control" | "left ctrl" | "left control" | "right ctrl" | "right control"
-        | "shift" | "left shift" | "right shift"
-        | "alt" | "option" | "left alt" | "left option" | "right alt" | "right option"
-        | "meta" | "command" | "cmd" | "super" | "win" | "windows"
-        | "left meta" | "left command" | "left cmd" | "left super" | "left win"
-        | "right meta" | "right command" | "right cmd" | "right super" | "right win"
+        "ctrl"
+            | "control"
+            | "left ctrl"
+            | "left control"
+            | "right ctrl"
+            | "right control"
+            | "shift"
+            | "left shift"
+            | "right shift"
+            | "alt"
+            | "option"
+            | "left alt"
+            | "left option"
+            | "right alt"
+            | "right option"
+            | "meta"
+            | "command"
+            | "cmd"
+            | "super"
+            | "win"
+            | "windows"
+            | "left meta"
+            | "left command"
+            | "left cmd"
+            | "left super"
+            | "left win"
+            | "right meta"
+            | "right command"
+            | "right cmd"
+            | "right super"
+            | "right win"
     )
 }
 
@@ -171,7 +214,9 @@ pub fn normalize_shortcut_string(raw: &str) -> Result<String, String> {
         }
     }
 
-    let key = key.ok_or_else(|| "Shortcut with multiple parts must contain a non-modifier key".to_string())?;
+    let key = key.ok_or_else(|| {
+        "Shortcut with multiple parts must contain a non-modifier key".to_string()
+    })?;
     Ok(normalize_combo_from_parts(&mut mods, &key))
 }
 
@@ -179,12 +224,16 @@ pub fn normalize_shortcut_string(raw: &str) -> Result<String, String> {
 /// "left ctrl" -> "ctrl", "right shift" -> "shift", etc.
 fn normalize_modifier_to_canonical(name: &str) -> String {
     match name {
-        "control" | "ctrl" | "left ctrl" | "left control" | "right ctrl" | "right control" => "ctrl".to_string(),
+        "control" | "ctrl" | "left ctrl" | "left control" | "right ctrl" | "right control" => {
+            "ctrl".to_string()
+        }
         "shift" | "left shift" | "right shift" => "shift".to_string(),
-        "alt" | "option" | "left alt" | "left option" | "right alt" | "right option" => "alt".to_string(),
-        "meta" | "command" | "cmd" | "super" | "win" | "windows"
-        | "left meta" | "left command" | "left cmd" | "left super" | "left win"
-        | "right meta" | "right command" | "right cmd" | "right super" | "right win" => "meta".to_string(),
+        "alt" | "option" | "left alt" | "left option" | "right alt" | "right option" => {
+            "alt".to_string()
+        }
+        "meta" | "command" | "cmd" | "super" | "win" | "windows" | "left meta" | "left command"
+        | "left cmd" | "left super" | "left win" | "right meta" | "right command" | "right cmd"
+        | "right super" | "right win" => "meta".to_string(),
         _ => name.to_string(),
     }
 }
@@ -233,7 +282,6 @@ pub fn validate_shortcut_string(raw: &str) -> Result<(), String> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -249,28 +297,55 @@ mod tests {
     #[test]
     fn test_normalize_modifier_combinations() {
         // Basic combinations
-        assert_eq!(normalize_shortcut_string("ctrl+space").unwrap(), "ctrl+space");
+        assert_eq!(
+            normalize_shortcut_string("ctrl+space").unwrap(),
+            "ctrl+space"
+        );
         assert_eq!(normalize_shortcut_string("shift+a").unwrap(), "shift+a");
 
         // Left/right modifiers with keys
-        assert_eq!(normalize_shortcut_string("left ctrl+f1").unwrap(), "ctrl+f1");
-        assert_eq!(normalize_shortcut_string("right shift+a").unwrap(), "shift+a");
+        assert_eq!(
+            normalize_shortcut_string("left ctrl+f1").unwrap(),
+            "ctrl+f1"
+        );
+        assert_eq!(
+            normalize_shortcut_string("right shift+a").unwrap(),
+            "shift+a"
+        );
 
         // Multiple modifiers
-        assert_eq!(normalize_shortcut_string("ctrl+shift+a").unwrap(), "ctrl+shift+a");
-        assert_eq!(normalize_shortcut_string("left ctrl+shift+f1").unwrap(), "ctrl+shift+f1");
+        assert_eq!(
+            normalize_shortcut_string("ctrl+shift+a").unwrap(),
+            "ctrl+shift+a"
+        );
+        assert_eq!(
+            normalize_shortcut_string("left ctrl+shift+f1").unwrap(),
+            "ctrl+shift+f1"
+        );
 
         // Case insensitive
-        assert_eq!(normalize_shortcut_string("CTRL+SPACE").unwrap(), "ctrl+space");
-        assert_eq!(normalize_shortcut_string("Left Ctrl+F1").unwrap(), "ctrl+f1");
+        assert_eq!(
+            normalize_shortcut_string("CTRL+SPACE").unwrap(),
+            "ctrl+space"
+        );
+        assert_eq!(
+            normalize_shortcut_string("Left Ctrl+F1").unwrap(),
+            "ctrl+f1"
+        );
     }
 
     #[test]
     fn test_normalize_single_modifiers() {
         // Single modifier keys as shortcuts
         assert_eq!(normalize_shortcut_string("left alt").unwrap(), "left alt");
-        assert_eq!(normalize_shortcut_string("right ctrl").unwrap(), "right ctrl");
-        assert_eq!(normalize_shortcut_string("left shift").unwrap(), "left shift");
+        assert_eq!(
+            normalize_shortcut_string("right ctrl").unwrap(),
+            "right ctrl"
+        );
+        assert_eq!(
+            normalize_shortcut_string("left shift").unwrap(),
+            "left shift"
+        );
         assert_eq!(normalize_shortcut_string("right alt").unwrap(), "right alt");
 
         // Canonical modifiers default to left
@@ -279,8 +354,14 @@ mod tests {
         assert_eq!(normalize_shortcut_string("shift").unwrap(), "shift");
 
         // Aliases
-        assert_eq!(normalize_shortcut_string("left option").unwrap(), "left alt");
-        assert_eq!(normalize_shortcut_string("left control").unwrap(), "left ctrl");
+        assert_eq!(
+            normalize_shortcut_string("left option").unwrap(),
+            "left alt"
+        );
+        assert_eq!(
+            normalize_shortcut_string("left control").unwrap(),
+            "left ctrl"
+        );
     }
 
     #[test]
@@ -318,12 +399,30 @@ mod tests {
     fn test_modifier_key_to_specific_name() {
         use rdev::Key;
 
-        assert_eq!(modifier_key_to_specific_name(Key::ControlLeft), Some("left ctrl".to_string()));
-        assert_eq!(modifier_key_to_specific_name(Key::ControlRight), Some("right ctrl".to_string()));
-        assert_eq!(modifier_key_to_specific_name(Key::ShiftLeft), Some("left shift".to_string()));
-        assert_eq!(modifier_key_to_specific_name(Key::ShiftRight), Some("right shift".to_string()));
-        assert_eq!(modifier_key_to_specific_name(Key::Alt), Some("left alt".to_string()));
-        assert_eq!(modifier_key_to_specific_name(Key::AltGr), Some("right alt".to_string()));
+        assert_eq!(
+            modifier_key_to_specific_name(Key::ControlLeft),
+            Some("left ctrl".to_string())
+        );
+        assert_eq!(
+            modifier_key_to_specific_name(Key::ControlRight),
+            Some("right ctrl".to_string())
+        );
+        assert_eq!(
+            modifier_key_to_specific_name(Key::ShiftLeft),
+            Some("left shift".to_string())
+        );
+        assert_eq!(
+            modifier_key_to_specific_name(Key::ShiftRight),
+            Some("right shift".to_string())
+        );
+        assert_eq!(
+            modifier_key_to_specific_name(Key::Alt),
+            Some("left alt".to_string())
+        );
+        assert_eq!(
+            modifier_key_to_specific_name(Key::AltGr),
+            Some("right alt".to_string())
+        );
 
         assert_eq!(modifier_key_to_specific_name(Key::KeyA), None);
     }
