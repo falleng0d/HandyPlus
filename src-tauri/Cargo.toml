@@ -2,7 +2,7 @@
 name = "handy"
 version = "0.6.0"
 description = "Handy"
-authors = ["cjpais"]
+authors = ["cjpais", "mateus.junior <mateus@matj.dev"]
 edition = "2021"
 license = "MIT"
 default-run = "handy"
