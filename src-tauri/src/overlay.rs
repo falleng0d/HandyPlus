@@ -2,6 +2,8 @@ use crate::settings;
 use crate::settings::OverlayPosition;
 use enigo::{Enigo, Mouse};
 use log::debug;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindowBuilder};
 
 const OVERLAY_WIDTH: f64 = 172.0;
@@ -17,6 +19,12 @@ const OVERLAY_BOTTOM_OFFSET: f64 = 15.0;
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 const OVERLAY_BOTTOM_OFFSET: f64 = 40.0;
+
+static OVERLAY_VISIBILITY_TOKEN: AtomicU64 = AtomicU64::new(0);
+
+fn bump_overlay_visibility_token() -> u64 {
+    OVERLAY_VISIBILITY_TOKEN.fetch_add(1, Ordering::SeqCst) + 1
+}
 
 fn get_monitor_with_cursor(app_handle: &AppHandle) -> Option<tauri::Monitor> {
     let enigo = Enigo::new(&Default::default());
@@ -126,6 +134,7 @@ pub fn show_recording_overlay(app_handle: &AppHandle) {
         return;
     }
 
+    let _visibility_token = bump_overlay_visibility_token();
     update_overlay_position(app_handle);
 
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
@@ -143,6 +152,7 @@ pub fn show_transcribing_overlay(app_handle: &AppHandle) {
         return;
     }
 
+    let _visibility_token = bump_overlay_visibility_token();
     update_overlay_position(app_handle);
 
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
@@ -171,9 +181,12 @@ pub fn hide_recording_overlay(app_handle: &AppHandle) {
         let _ = overlay_window.emit("hide-overlay", ());
         // Hide the window after a short delay to allow animation to complete
         let window_clone = overlay_window.clone();
+        let hide_token = bump_overlay_visibility_token();
         std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(300));
-            let _ = window_clone.hide();
+            std::thread::sleep(Duration::from_millis(300));
+            if OVERLAY_VISIBILITY_TOKEN.load(Ordering::SeqCst) == hide_token {
+                let _ = window_clone.hide();
+            }
         });
     }
 }

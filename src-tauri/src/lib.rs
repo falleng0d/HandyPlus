@@ -2,17 +2,19 @@ mod actions;
 mod audio_feedback;
 pub mod audio_toolkit;
 mod clipboard;
+mod command;
 mod commands;
 mod hotkey;
 mod llm_client;
 mod managers;
 mod overlay;
 mod settings;
-mod command;
+mod shortcut;
+mod state;
 mod tray;
 mod utils;
-mod shortcut;
 
+use crate::state::LastTranscriptState;
 use managers::audio::AudioRecordingManager;
 use managers::history::HistoryManager;
 use managers::model::ModelManager;
@@ -25,6 +27,7 @@ use tauri::tray::TrayIconBuilder;
 use tauri::Emitter;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use tauri_plugin_clipboard_manager::ClipboardExt;
 
 #[derive(Default)]
 struct ShortcutToggleStates {
@@ -69,12 +72,14 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     );
     let history_manager =
         Arc::new(HistoryManager::new(app_handle).expect("Failed to initialize history manager"));
+    let last_transcript_state = LastTranscriptState::new();
 
     // Add managers to Tauri's managed state
     app_handle.manage(recording_manager.clone());
     app_handle.manage(model_manager.clone());
     app_handle.manage(transcription_manager.clone());
     app_handle.manage(history_manager.clone());
+    app_handle.manage(last_transcript_state.clone());
 
     // Initialize the shortcuts
     shortcut::init_shortcuts(app_handle);
@@ -118,6 +123,14 @@ fn initialize_core_logic(app_handle: &AppHandle) {
 
                 // Use centralized cancellation that handles all operations
                 cancel_current_operation(app);
+            }
+            "copy_last_transcript" => {
+                if let Some(text) = app.state::<LastTranscriptState>().get() {
+                    match app.clipboard().write_text(&text) {
+                        Ok(_) => println!("Last transcript copied from tray menu"),
+                        Err(err) => eprintln!("Failed to copy last transcript: {}", err),
+                    }
+                }
             }
             "quit" => {
                 app.exit(0);

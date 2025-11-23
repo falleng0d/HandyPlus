@@ -1,8 +1,8 @@
+use log::error;
+use rustfft::num_traits::ToPrimitive;
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
-use log::error;
 use std::thread;
-use rustfft::num_traits::ToPrimitive;
 
 enum VolumeCommand {
     Get,
@@ -66,7 +66,11 @@ impl VolumeController {
     pub fn set_system_volume(&self, volume: u8) {
         let (response_tx, response_rx) = mpsc::channel();
 
-        if self.tx.send((VolumeCommand::Set(volume), response_tx)).is_err() {
+        if self
+            .tx
+            .send((VolumeCommand::Set(volume), response_tx))
+            .is_err()
+        {
             error!("Failed to send volume set command");
             return;
         }

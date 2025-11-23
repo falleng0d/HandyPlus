@@ -4,6 +4,7 @@ use crate::managers::history::HistoryManager;
 use crate::managers::transcription::TranscriptionManager;
 use crate::overlay::{show_recording_overlay, show_transcribing_overlay};
 use crate::settings::{get_settings, AppSettings};
+use crate::state::LastTranscriptState;
 use crate::tray::{change_tray_icon, TrayIconState};
 use crate::utils;
 use async_openai::types::{
@@ -229,6 +230,7 @@ impl ShortcutAction for TranscribeAction {
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
 
         tauri::async_runtime::spawn(async move {
+            let last_transcript_state = ah.state::<LastTranscriptState>().clone();
             let binding_id = binding_id.clone(); // Clone for the inner async task
             debug!(
                 "Starting async transcription task for binding: {}",
@@ -292,6 +294,9 @@ impl ShortcutAction for TranscribeAction {
                                     error!("Failed to save transcription to history: {}", e);
                                 }
                             });
+
+                            // Store the final text so the tray menu can copy it later.
+                            last_transcript_state.set(Some(final_text.clone()));
 
                             // Paste the final text (either processed or original)
                             let ah_clone = ah.clone();

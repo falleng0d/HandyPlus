@@ -1,3 +1,4 @@
+use crate::state::LastTranscriptState;
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIcon;
@@ -96,6 +97,15 @@ pub fn update_tray_menu(app: &AppHandle, state: &TrayIconState) {
     .expect("failed to create check updates item");
     let quit_i = MenuItem::with_id(app, "quit", "Quit", true, quit_accelerator)
         .expect("failed to create quit item");
+    let has_last_transcript = app.state::<LastTranscriptState>().has_transcript();
+    let copy_last_transcript_i = MenuItem::with_id(
+        app,
+        "copy_last_transcript",
+        "Copy Last Transcript",
+        has_last_transcript,
+        None::<&str>,
+    )
+    .expect("failed to create copy last transcript item");
     let separator = || PredefinedMenuItem::separator(app).expect("failed to create separator");
 
     let menu = match state {
@@ -106,6 +116,8 @@ pub fn update_tray_menu(app: &AppHandle, state: &TrayIconState) {
                 app,
                 &[
                     &version_i,
+                    &separator(),
+                    &copy_last_transcript_i,
                     &separator(),
                     &cancel_i,
                     &separator(),
@@ -121,6 +133,8 @@ pub fn update_tray_menu(app: &AppHandle, state: &TrayIconState) {
             app,
             &[
                 &version_i,
+                &separator(),
+                &copy_last_transcript_i,
                 &separator(),
                 &settings_i,
                 &check_updates_i,
