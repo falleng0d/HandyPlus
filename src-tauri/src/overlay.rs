@@ -139,6 +139,7 @@ pub fn show_recording_overlay(app_handle: &AppHandle) {
 
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
         let _ = overlay_window.show();
+        let _ = overlay_window.set_always_on_top(true);
         // Emit event to trigger fade-in animation with recording state
         let _ = overlay_window.emit("show-overlay", "recording");
     }
