@@ -10,6 +10,7 @@ import { LowerVolumeWhileRecordingToggle } from "../LowerVolumeWhileRecordingTog
 import { VolumeWhileRecordingSlider } from "../VolumeWhileRecordingSlider";
 import { OnRecordingStartScriptInput } from "../OnRecordingStartScriptInput";
 import { OnRecordingEndScriptInput } from "../OnRecordingEndScriptInput";
+import { PauseDragonToggle } from "./PauseDragonToggle";
 
 export const DebugSettings: React.FC = () => {
   return (
@@ -24,8 +25,12 @@ export const DebugSettings: React.FC = () => {
         <AlwaysOnMicrophone descriptionMode="tooltip" grouped={true} />
         <PostProcessingToggle descriptionMode="tooltip" grouped={true} />
         <MuteWhileRecording descriptionMode="tooltip" grouped={true} />
-        <LowerVolumeWhileRecordingToggle descriptionMode="tooltip" grouped={true} />
+        <LowerVolumeWhileRecordingToggle
+          descriptionMode="tooltip"
+          grouped={true}
+        />
         <VolumeWhileRecordingSlider descriptionMode="tooltip" grouped={true} />
+        <PauseDragonToggle descriptionMode="tooltip" grouped={true} />
         <OnRecordingStartScriptInput descriptionMode="tooltip" grouped={true} />
         <OnRecordingEndScriptInput descriptionMode="tooltip" grouped={true} />
       </SettingsGroup>

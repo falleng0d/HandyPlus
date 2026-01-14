@@ -262,6 +262,17 @@ pub fn change_volume_while_recording_setting(app: AppHandle, volume: f32) -> Res
 }
 
 #[tauri::command]
+pub fn change_pause_dragon_when_dictating_setting(
+    app: AppHandle,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.pause_dragon_when_dictating = enabled;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn change_on_recording_start_script_setting(
     app: AppHandle,
     script: String,

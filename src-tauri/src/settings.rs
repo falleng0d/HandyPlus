@@ -205,6 +205,8 @@ pub struct AppSettings {
     pub on_recording_start_script: String,
     #[serde(default = "default_on_recording_end_script")]
     pub on_recording_end_script: String,
+    #[serde(default = "default_pause_dragon_when_dictating")]
+    pub pause_dragon_when_dictating: bool,
 }
 
 fn default_model() -> String {
@@ -339,6 +341,10 @@ fn default_on_recording_end_script() -> String {
     String::new()
 }
 
+fn default_pause_dragon_when_dictating() -> bool {
+    false
+}
+
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
@@ -397,6 +403,7 @@ pub fn get_default_settings() -> AppSettings {
         volume_while_recording: default_volume_while_recording(),
         on_recording_start_script: default_on_recording_start_script(),
         on_recording_end_script: default_on_recording_end_script(),
+        pause_dragon_when_dictating: default_pause_dragon_when_dictating(),
     }
 }
 

@@ -32,8 +32,12 @@ pub fn disable_dragon_dictation() {
 }
 
 pub fn enable_dragon_dictation() {
+    thread::sleep(Duration::from_millis(50));
+
+    send(&EventType::KeyPress(Key::Alt));
     send(&EventType::KeyPress(Key::ControlLeft));
     send(&EventType::KeyPress(Key::F7));
     send(&EventType::KeyRelease(Key::F7));
     send(&EventType::KeyRelease(Key::ControlLeft));
+    send(&EventType::KeyRelease(Key::Alt));
 }

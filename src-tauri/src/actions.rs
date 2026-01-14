@@ -184,6 +184,8 @@ impl ShortcutAction for TranscribeAction {
         let is_always_on = settings.always_on_microphone;
         debug!("Microphone mode - always_on: {}", is_always_on);
 
+        Self::enable_dragon_dictation(settings);
+
         if is_always_on {
             // Always-on mode: Play audio feedback immediately
             debug!("Always-on mode: Playing audio feedback immediately");
@@ -218,6 +220,8 @@ impl ShortcutAction for TranscribeAction {
     fn stop(&self, app: &AppHandle, binding_id: &str, _shortcut_str: &str) {
         let stop_time = Instant::now();
         debug!("TranscribeAction::stop called for binding: {}", binding_id);
+
+        Self::pause_dragon_dictation(get_settings(app));
 
         let ah = app.clone();
         let rm = Arc::clone(&app.state::<Arc<AudioRecordingManager>>());
@@ -343,6 +347,36 @@ impl ShortcutAction for TranscribeAction {
             "TranscribeAction::stop completed in {:?}",
             stop_time.elapsed()
         );
+    }
+}
+
+impl TranscribeAction {
+    fn pause_dragon_dictation(settings: AppSettings) {
+        if settings.pause_dragon_when_dictating {
+            std::thread::spawn(|| {
+                std::thread::spawn(|| {
+                    crate::dragon::dragon::enable_dragon_dictation();
+                });
+                let _ = std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                })
+                .join();
+            });
+        }
+    }
+
+    fn enable_dragon_dictation(settings: AppSettings) {
+        if settings.pause_dragon_when_dictating {
+            std::thread::spawn(|| {
+                std::thread::spawn(|| {
+                    crate::dragon::dragon::disable_dragon_dictation();
+                });
+                let _ = std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                })
+                .join();
+            });
+        }
     }
 }
 

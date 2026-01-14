@@ -256,6 +256,7 @@ pub fn run() {
             command::change_post_process_model_setting,
             command::change_lower_volume_while_recording_setting,
             command::change_volume_while_recording_setting,
+            command::change_pause_dragon_when_dictating_setting,
             command::change_on_recording_start_script_setting,
             command::change_on_recording_end_script_setting,
             command::set_post_process_provider,
