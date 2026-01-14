@@ -4,6 +4,7 @@ pub mod audio_toolkit;
 mod clipboard;
 mod command;
 mod commands;
+mod dragon;
 mod hotkey;
 mod llm_client;
 mod managers;
