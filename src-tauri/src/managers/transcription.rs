@@ -387,6 +387,9 @@ impl TranscriptionManager {
             result.text
         };
 
+        // Remove extra spaces
+        let corrected_result = corrected_result.replace(r" {2,}", " ");
+
         let et = std::time::Instant::now();
         let translation_note = if settings.translate_to_english {
             " (translated)"
