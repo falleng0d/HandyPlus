@@ -97,8 +97,11 @@ async fn maybe_post_process_transcription(
         provider.id, model
     );
 
-    // Replace ${output} variable in the prompt with the actual text
-    let processed_prompt = prompt.replace("${output}", transcription);
+    // Replace variables in the prompt
+    let dictionary_str = settings.custom_words.join(", ");
+    let processed_prompt = prompt
+        .replace("${output}", transcription)
+        .replace("${dictionary}", &dictionary_str);
     debug!("Processed prompt length: {} chars", processed_prompt.len());
 
     // Create OpenAI-compatible client
