@@ -1,8 +1,8 @@
-use crate::audio_toolkit::apply_custom_words;
+use crate::audio_toolkit::{apply_custom_words, filter_transcription_output};
 use crate::managers::model::{EngineType, ModelManager};
 use crate::settings::{get_settings, ModelUnloadTimeout};
 use anyhow::Result;
-use log::debug;
+use log::{debug, error, info, warn};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -173,6 +173,19 @@ impl TranscriptionManager {
         Ok(())
     }
 
+    /// Unloads the model immediately if the setting is enabled and the model is loaded
+    pub fn maybe_unload_immediately(&self, context: &str) {
+        let settings = get_settings(&self.app_handle);
+        if settings.model_unload_timeout == ModelUnloadTimeout::Immediately
+            && self.is_model_loaded()
+        {
+            info!("Immediately unloading model after {}", context);
+            if let Err(e) = self.unload_model() {
+                warn!("Failed to immediately unload model: {}", e);
+            }
+        }
+    }
+
     pub fn load_model(&self, model_id: &str) -> Result<()> {
         let load_start = std::time::Instant::now();
         debug!("Starting to load model: {}", model_id);
@@ -315,7 +328,7 @@ impl TranscriptionManager {
         thread::spawn(move || {
             let settings = get_settings(&self_clone.app_handle);
             if let Err(e) = self_clone.load_model(&settings.selected_model) {
-                eprintln!("Failed to load model: {}", e);
+                error!("Failed to load model: {}", e);
             }
             let mut is_loading = self_clone.is_loading.lock().unwrap();
             *is_loading = false;
@@ -340,10 +353,11 @@ impl TranscriptionManager {
 
         let st = std::time::Instant::now();
 
-        println!("Audio vector length: {}", audio.len());
+        debug!("Audio vector length: {}", audio.len());
 
-        if audio.len() == 0 {
-            println!("Empty audio vector");
+        if audio.is_empty() {
+            debug!("Empty audio vector");
+            self.maybe_unload_immediately("empty audio");
             return Ok(String::new());
         }
 
@@ -375,12 +389,23 @@ impl TranscriptionManager {
 
             match engine {
                 LoadedEngine::Whisper(whisper_engine) => {
-                    let params = WhisperInferenceParams {
-                        language: if settings.selected_language == "auto" {
-                            None
+                    // Normalize language code for Whisper
+                    // Convert zh-Hans and zh-Hant to zh since Whisper uses ISO 639-1 codes
+                    let whisper_language = if settings.selected_language == "auto" {
+                        None
+                    } else {
+                        let normalized = if settings.selected_language == "zh-Hans"
+                            || settings.selected_language == "zh-Hant"
+                        {
+                            "zh".to_string()
                         } else {
-                            Some(settings.selected_language.clone())
-                        },
+                            settings.selected_language.clone()
+                        };
+                        Some(normalized)
+                    };
+
+                    let params = WhisperInferenceParams {
+                        language: whisper_language,
                         translate: settings.translate_to_english,
                         ..Default::default()
                     };
@@ -415,23 +440,32 @@ impl TranscriptionManager {
             result.text
         };
 
+        // Filter out filler words and hallucinations
+        let filtered_result = filter_transcription_output(&corrected_result);
+
         let et = std::time::Instant::now();
         let translation_note = if settings.translate_to_english {
             " (translated)"
         } else {
             ""
         };
-        println!("\ntook {}ms{}", (et - st).as_millis(), translation_note);
+        info!(
+            "Transcription completed in {}ms{}",
+            (et - st).as_millis(),
+            translation_note
+        );
 
-        // Check if we should immediately unload the model after transcription
-        if settings.model_unload_timeout == ModelUnloadTimeout::Immediately {
-            println!("⚡ Immediately unloading model after transcription");
-            if let Err(e) = self.unload_model() {
-                eprintln!("Failed to immediately unload model: {}", e);
-            }
+        let final_result = filtered_result;
+
+        if final_result.is_empty() {
+            info!("Transcription result is empty");
+        } else {
+            info!("Transcription result: {}", final_result);
         }
 
-        Ok(corrected_result.trim().to_string())
+        self.maybe_unload_immediately("transcription");
+
+        Ok(final_result)
     }
 }
 
@@ -445,7 +479,7 @@ impl Drop for TranscriptionManager {
         // Wait for the thread to finish gracefully
         if let Some(handle) = self.watcher_handle.lock().unwrap().take() {
             if let Err(e) = handle.join() {
-                eprintln!("Failed to join idle watcher thread: {:?}", e);
+                warn!("Failed to join idle watcher thread: {:?}", e);
             } else {
                 debug!("Idle watcher thread joined successfully");
             }
