@@ -10,7 +10,7 @@ use crate::settings::ShortcutBinding;
 use crate::settings::{self, get_settings};
 use crate::ManagedToggleState;
 use once_cell::sync::OnceCell;
-use rdev::{listen, Event, EventType};
+use rdev::{grab, Event, EventType};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -58,21 +58,25 @@ pub fn init_shortcuts(app: &AppHandle) {
     // Spawn global listener thread once
     let app_handle = app.clone();
     thread::spawn(move || {
-        if let Err(e) = listen(move |event| {
-            handle_rdev_event(&app_handle, event);
-        }) {
+        if let Err(e) = grab(move |event| handle_rdev_event(&app_handle, event)) {
             eprintln!("Global key listener failed: {:?}", e);
         }
     });
 }
 
-fn handle_rdev_event(app: &AppHandle, event: Event) {
+fn handle_rdev_event(app: &AppHandle, event: Event) -> Option<Event> {
     let rt_arc = get_runtime().clone();
     let mut rt = rt_arc.lock().unwrap();
-    match event.event_type {
+    let handled = match event.event_type {
         EventType::KeyPress(k) => on_rdev_key_press_event(app, &mut rt, k),
         EventType::KeyRelease(k) => on_rdev_key_release_event(app, &mut rt, k),
-        _ => {}
+        _ => false,
+    };
+
+    if handled {
+        None
+    } else {
+        Some(event)
     }
 }
 
@@ -154,45 +158,65 @@ pub fn reset_binding(app: AppHandle, id: String) -> Result<BindingResponse, Stri
 }
 
 /// Handle a key press event from rdev
-fn on_rdev_key_press_event(app: &AppHandle, rt: &mut ShortcutRuntime, k: rdev::Key) {
+fn on_rdev_key_press_event(app: &AppHandle, rt: &mut ShortcutRuntime, k: rdev::Key) -> bool {
     if let Some(mod_name) = is_modifier_key(k) {
-        on_modifier_key_press(app, rt, k, mod_name);
+        on_modifier_key_press(app, rt, k, mod_name)
     } else if let Some(key_name) = key_to_name(k) {
-        on_regular_key_press(app, rt, key_name);
+        on_regular_key_press(app, rt, key_name)
+    } else {
+        false
     }
 }
 
 /// Handle a key release event from rdev
-fn on_rdev_key_release_event(app: &AppHandle, rt: &mut ShortcutRuntime, k: rdev::Key) {
+fn on_rdev_key_release_event(app: &AppHandle, rt: &mut ShortcutRuntime, k: rdev::Key) -> bool {
     if let Some(mod_name) = is_modifier_key(k) {
-        on_modifier_key_release(app, rt, k, mod_name);
+        on_modifier_key_release(app, rt, k, mod_name)
     } else if let Some(key_name) = key_to_name(k) {
-        on_regular_key_release(app, rt, key_name);
+        on_regular_key_release(app, rt, key_name)
+    } else {
+        false
     }
 }
 
 /// Handle a modifier key press (e.g., Ctrl, Shift, Alt, Meta)
-fn on_modifier_key_press(app: &AppHandle, rt: &mut ShortcutRuntime, k: rdev::Key, mod_name: &str) {
+fn on_modifier_key_press(
+    app: &AppHandle,
+    rt: &mut ShortcutRuntime,
+    k: rdev::Key,
+    mod_name: &str,
+) -> bool {
     // Track this modifier as pressed
     rt.pressed_mods.insert(mod_name.to_string());
 
     // Check if this modifier key itself is a registered shortcut
     if let Some(specific_mod_name) = modifier_key_to_specific_name(k) {
+        let is_registered = rt.combo_to_id.contains_key(&specific_mod_name);
         if rt.pressed_modifier_keys.insert(specific_mod_name.clone()) {
             // Newly pressed modifier key - check if it's registered as a shortcut
-            trigger_shortcut_if_registered(app, rt, &specific_mod_name);
+            if is_registered {
+                trigger_shortcut_if_registered(app, rt, &specific_mod_name);
+            }
         }
+        return is_registered;
     }
+    false
 }
 
 /// Handle a regular (non-modifier) key press
-fn on_regular_key_press(app: &AppHandle, rt: &mut ShortcutRuntime, key_name: String) {
-    if rt.pressed_keys.insert(key_name.clone()) {
-        // Newly pressed non-modifier key
-        let mut mods: Vec<String> = rt.pressed_mods.iter().cloned().collect();
-        let combo = normalize_combo_from_parts(&mut mods, &key_name);
-        trigger_shortcut_if_registered(app, rt, &combo);
+fn on_regular_key_press(app: &AppHandle, rt: &mut ShortcutRuntime, key_name: String) -> bool {
+    let is_new_press = rt.pressed_keys.insert(key_name.clone());
+
+    let mut mods: Vec<String> = rt.pressed_mods.iter().cloned().collect();
+    let combo = normalize_combo_from_parts(&mut mods, &key_name);
+    let is_registered = rt.combo_to_id.contains_key(&combo);
+
+    if is_new_press {
+        if is_registered {
+            trigger_shortcut_if_registered(app, rt, &combo);
+        }
     }
+    is_registered
 }
 
 /// Handle a modifier key release (e.g., Ctrl, Shift, Alt, Meta)
@@ -201,26 +225,37 @@ fn on_modifier_key_release(
     rt: &mut ShortcutRuntime,
     k: rdev::Key,
     mod_name: &str,
-) {
+) -> bool {
     rt.pressed_mods.remove(mod_name);
 
     // Check if this modifier key was registered as a shortcut
     if let Some(specific_mod_name) = modifier_key_to_specific_name(k) {
+        let is_registered = rt.combo_to_id.contains_key(&specific_mod_name);
         if rt.pressed_modifier_keys.remove(&specific_mod_name) {
             // Was pressed; handle PTT stop for modifier shortcuts
-            stop_shortcut_if_registered_ptt(app, rt, &specific_mod_name);
+            if is_registered {
+                stop_shortcut_if_registered_ptt(app, rt, &specific_mod_name);
+            }
         }
+        return is_registered;
     }
+    false
 }
 
 /// Handle a regular (non-modifier) key release
-fn on_regular_key_release(app: &AppHandle, rt: &mut ShortcutRuntime, key_name: String) {
-    if rt.pressed_keys.remove(&key_name) {
-        // Was pressed; handle PTT stop
-        let mut mods: Vec<String> = rt.pressed_mods.iter().cloned().collect();
-        let combo = normalize_combo_from_parts(&mut mods, &key_name);
-        stop_shortcut_if_registered_ptt(app, rt, &combo);
+fn on_regular_key_release(app: &AppHandle, rt: &mut ShortcutRuntime, key_name: String) -> bool {
+    let was_pressed = rt.pressed_keys.remove(&key_name);
+
+    let mut mods: Vec<String> = rt.pressed_mods.iter().cloned().collect();
+    let combo = normalize_combo_from_parts(&mut mods, &key_name);
+    let is_registered = rt.combo_to_id.contains_key(&combo);
+
+    if was_pressed {
+        if is_registered {
+            stop_shortcut_if_registered_ptt(app, rt, &combo);
+        }
     }
+    is_registered
 }
 
 /// Trigger a shortcut action if it's registered (handles both PTT and toggle modes)
