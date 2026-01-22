@@ -431,11 +431,6 @@ impl TranscriptionManager {
             }
         }
 
-        // If there is a single dot at the end of the sentence, remove it.
-        if corrected_result.ends_with('.') {
-            return Ok(corrected_result.trim_end_matches('.').to_string());
-        }
-
         Ok(corrected_result.trim().to_string())
     }
 }
