@@ -23,6 +23,9 @@ pub fn get_current_theme(app: &AppHandle) -> AppTheme {
     if cfg!(target_os = "linux") {
         // On Linux, always use the colored theme
         AppTheme::Colored
+    } else if cfg!(target_os = "windows") {
+        // On Windows, always use the dark theme since the taskbar is dark
+        AppTheme::Dark
     } else {
         // On other platforms, map system theme to our app theme
         if let Some(main_window) = app.get_webview_window("main") {
