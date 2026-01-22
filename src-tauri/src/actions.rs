@@ -164,6 +164,17 @@ async fn maybe_post_process_transcription(
     }
 }
 
+fn cleanup_after_transcription(transcription: String) -> String {
+    // Remove extra spaces
+    let mut cleaned_transcription = transcription.replace(r" {2,}", " ");
+    // If there is a single dot at the end of the sentence, remove it.
+    if cleaned_transcription.ends_with('.') {
+        cleaned_transcription = cleaned_transcription.trim_end_matches('.').to_string();
+    }
+
+    cleaned_transcription
+}
+
 impl ShortcutAction for TranscribeAction {
     fn start(&self, app: &AppHandle, binding_id: &str, _shortcut_str: &str) {
         let start_time = Instant::now();
@@ -284,6 +295,8 @@ impl ShortcutAction for TranscribeAction {
                                     }
                                 }
                             }
+
+                            final_text = cleanup_after_transcription(final_text.clone());
 
                             // Save to history with post-processed text and prompt
                             let hm_clone = Arc::clone(&hm);
