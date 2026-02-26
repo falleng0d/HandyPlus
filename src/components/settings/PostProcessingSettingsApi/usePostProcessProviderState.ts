@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useSettings } from "../../../hooks/useSettings";
-import { useSettingsStore } from "../../../stores/settingsStore";
 import type { PostProcessProvider } from "../../../lib/types";
 import type { ModelOption } from "./types";
 import type { DropdownOption } from "../../ui/Dropdown";

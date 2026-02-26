@@ -4,11 +4,11 @@ import HandyTextLogo from "./icons/HandyTextLogo";
 import HandyHand from "./icons/HandyHand";
 import { useSettings } from "../hooks/useSettings";
 import {
-  GeneralSettings,
-  AdvancedSettings,
-  HistorySettings,
-  DebugSettings,
   AboutSettings,
+  AdvancedSettings,
+  DebugSettings,
+  GeneralSettings,
+  HistorySettings,
   PostProcessingSettings,
 } from "./settings";
 

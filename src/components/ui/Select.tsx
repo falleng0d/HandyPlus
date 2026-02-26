@@ -1,12 +1,12 @@
 import React from "react";
-import SelectComponent from "react-select";
-import CreatableSelect from "react-select/creatable";
 import type {
   ActionMeta,
   Props as ReactSelectProps,
   SingleValue,
   StylesConfig,
 } from "react-select";
+import SelectComponent from "react-select";
+import CreatableSelect from "react-select/creatable";
 
 export type SelectOption = {
   value: string;

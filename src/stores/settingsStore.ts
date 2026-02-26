@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { invoke } from "@tauri-apps/api/core";
-import { Settings, AudioDevice } from "../lib/types";
+import { AudioDevice, Settings } from "../lib/types";
 
 interface SettingsStore {
   settings: Settings | null;

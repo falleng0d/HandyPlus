@@ -5,7 +5,7 @@ import "./App.css";
 import AccessibilityPermissions from "./components/AccessibilityPermissions";
 import Footer from "./components/footer";
 import Onboarding from "./components/onboarding";
-import { Sidebar, SidebarSection, SECTIONS_CONFIG } from "./components/Sidebar";
+import { SECTIONS_CONFIG, Sidebar, SidebarSection } from "./components/Sidebar";
 import { useSettings } from "./hooks/useSettings";
 
 const renderSettingsContent = (section: SidebarSection) => {

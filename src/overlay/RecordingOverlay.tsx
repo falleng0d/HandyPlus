@@ -2,9 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  CancelIcon,
   MicrophoneIcon,
   TranscriptionIcon,
-  CancelIcon,
 } from "../components/icons";
 import "./RecordingOverlay.css";
 

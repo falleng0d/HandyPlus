@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ModelInfo } from "../../lib/types";
 import ModelCard from "./ModelCard";

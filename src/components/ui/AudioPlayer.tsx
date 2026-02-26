@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Play, Pause } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Pause, Play } from "lucide-react";
 
 interface AudioPlayerProps {
   src: string;
