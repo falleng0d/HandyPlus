@@ -20,6 +20,15 @@ pub struct LLMPrompt {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LanguageConfig {
+    pub id: String,
+    pub language: String,
+    pub shortcut_binding: String,
+    pub prompt_id: Option<String>,
+    pub model: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PostProcessProvider {
     pub id: String,
     pub label: String,
@@ -207,6 +216,10 @@ pub struct AppSettings {
     pub on_recording_end_script: String,
     #[serde(default = "default_pause_dragon_when_dictating")]
     pub pause_dragon_when_dictating: bool,
+    #[serde(default)]
+    pub language_configs: Vec<LanguageConfig>,
+    #[serde(default = "default_language_cycle_shortcut")]
+    pub language_cycle_shortcut: String,
 }
 
 fn default_model() -> String {
@@ -345,6 +358,10 @@ fn default_pause_dragon_when_dictating() -> bool {
     false
 }
 
+fn default_language_cycle_shortcut() -> String {
+    String::new()
+}
+
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
@@ -404,6 +421,8 @@ pub fn get_default_settings() -> AppSettings {
         on_recording_start_script: default_on_recording_start_script(),
         on_recording_end_script: default_on_recording_end_script(),
         pause_dragon_when_dictating: default_pause_dragon_when_dictating(),
+        language_configs: Vec::new(),
+        language_cycle_shortcut: default_language_cycle_shortcut(),
     }
 }
 

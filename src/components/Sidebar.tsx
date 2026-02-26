@@ -1,5 +1,12 @@
 import React from "react";
-import { Cog, FlaskConical, History, Info, Sparkles } from "lucide-react";
+import {
+  Cog,
+  FlaskConical,
+  History,
+  Info,
+  Languages,
+  Sparkles,
+} from "lucide-react";
 import HandyTextLogo from "./icons/HandyTextLogo";
 import HandyHand from "./icons/HandyHand";
 import { useSettings } from "../hooks/useSettings";
@@ -9,6 +16,7 @@ import {
   DebugSettings,
   GeneralSettings,
   HistorySettings,
+  LanguageShortcutsSettings,
   PostProcessingSettings,
 } from "./settings";
 
@@ -52,6 +60,12 @@ export const SECTIONS_CONFIG = {
     label: "History",
     icon: History,
     component: HistorySettings,
+    enabled: () => true,
+  },
+  languages: {
+    label: "Languages",
+    icon: Languages,
+    component: LanguageShortcutsSettings,
     enabled: () => true,
   },
   debug: {

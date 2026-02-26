@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { twMerge } from "tailwind-merge";
 
 export interface DropdownOption {
   value: string;
@@ -14,6 +15,8 @@ interface DropdownProps {
   placeholder?: string;
   disabled?: boolean;
   onRefresh?: () => void;
+  wide?: boolean;
+  buttonClassName?: string;
 }
 
 export const Dropdown: React.FC<DropdownProps> = ({
@@ -24,6 +27,8 @@ export const Dropdown: React.FC<DropdownProps> = ({
   placeholder = "Select an option...",
   disabled = false,
   onRefresh,
+  wide = true,
+  buttonClassName = "",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -60,17 +65,19 @@ export const Dropdown: React.FC<DropdownProps> = ({
     <div className={`relative ${className}`} ref={dropdownRef}>
       <button
         type="button"
-        className={`px-2 py-1 text-sm font-semibold bg-mid-gray/10 border border-mid-gray/80 rounded min-w-[200px] text-left flex items-center justify-between transition-all duration-150 ${
-          disabled
-            ? "opacity-50 cursor-not-allowed"
-            : "hover:bg-logo-primary/10 cursor-pointer hover:border-logo-primary"
-        }`}
+        className={twMerge(
+          `px-2 py-1 text-sm font-semibold w-full bg-mid-gray/10 border border-mid-gray/80 rounded text-left flex items-center justify-between truncate transition-all duration-150 ${wide ? "min-w-[200px]" : ""} ${
+            disabled
+              ? "opacity-50 cursor-not-allowed"
+              : "hover:bg-logo-primary/10 cursor-pointer hover:border-logo-primary"
+          } ${buttonClassName}`,
+        )}
         onClick={handleToggle}
         disabled={disabled}
       >
         <span className="truncate">{selectedOption?.label || placeholder}</span>
         <svg
-          className={`w-4 h-4 ml-2 transition-transform duration-200 ${isOpen ? "transform rotate-180" : ""}`}
+          className={`min-w-4 w-4 h-4 ml-2 transition-transform duration-200 ${isOpen ? "transform rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -84,7 +91,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
         </svg>
       </button>
       {isOpen && !disabled && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-mid-gray/80 rounded shadow-lg z-50 max-h-60 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-mid-gray/80 rounded shadow-lg z-50 max-h-60 min-w-50 overflow-y-auto">
           {options.length === 0 ? (
             <div className="px-2 py-1 text-sm text-mid-gray">
               No options found

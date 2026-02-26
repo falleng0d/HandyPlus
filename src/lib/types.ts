@@ -51,6 +51,16 @@ export const LLMPromptSchema = z.object({
 
 export type LLMPrompt = z.infer<typeof LLMPromptSchema>;
 
+export const LanguageConfigSchema = z.object({
+  id: z.string(),
+  language: z.string(),
+  shortcut_binding: z.string(),
+  prompt_id: z.string().nullable(),
+  model: z.string().nullable(),
+});
+
+export type LanguageConfig = z.infer<typeof LanguageConfigSchema>;
+
 export const PostProcessProviderSchema = z.object({
   id: z.string(),
   label: z.string(),
@@ -106,6 +116,8 @@ export const SettingsSchema = z.object({
   pause_dragon_when_dictating: z.boolean().optional().default(false),
   on_recording_start_script: z.string().optional().default(""),
   on_recording_end_script: z.string().optional().default(""),
+  language_configs: z.array(LanguageConfigSchema).optional().default([]),
+  language_cycle_shortcut: z.string().optional().default(""),
 });
 
 export const BindingResponseSchema = z.object({

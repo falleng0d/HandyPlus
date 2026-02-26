@@ -1,5 +1,5 @@
 use serde::Serialize;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::actions::ACTION_MAP;
 use crate::hotkey::{
@@ -7,7 +7,7 @@ use crate::hotkey::{
     normalize_shortcut_string, validate_shortcut_string,
 };
 use crate::settings::ShortcutBinding;
-use crate::settings::{self, get_settings};
+use crate::settings::{self, get_settings, LanguageConfig};
 use crate::ManagedToggleState;
 use once_cell::sync::OnceCell;
 use rdev::{grab, Event, EventType};
@@ -51,6 +51,23 @@ pub fn init_shortcuts(app: &AppHandle) {
                 // last writer wins for duplicates in settings
                 rt.combo_to_id.insert(combo, binding.id.clone());
                 rt.bindings_by_id.insert(binding.id.clone(), binding);
+            }
+        }
+
+        // Load language cycle shortcut
+        if !settings.language_cycle_shortcut.is_empty() {
+            if let Ok(combo) = normalize_shortcut_string(&settings.language_cycle_shortcut) {
+                rt.combo_to_id.insert(combo, "language_cycle".to_string());
+            }
+        }
+
+        // Load per-language shortcuts
+        for config in &settings.language_configs {
+            if !config.shortcut_binding.is_empty() {
+                if let Ok(combo) = normalize_shortcut_string(&config.shortcut_binding) {
+                    let binding_id = format!("language:{}", config.id);
+                    rt.combo_to_id.insert(combo, binding_id);
+                }
             }
         }
     }
@@ -263,6 +280,26 @@ fn trigger_shortcut_if_registered(app: &AppHandle, rt: &ShortcutRuntime, combo: 
     if let Some(binding_id) = rt.combo_to_id.get(combo).cloned() {
         let shortcut_string = combo.to_string();
         let settings = get_settings(app);
+
+        // Handle language cycle shortcut (instant toggle, no PTT semantics)
+        if binding_id == "language_cycle" {
+            apply_language_cycle(app, &settings);
+            return;
+        }
+
+        // Handle per-language shortcuts (instant toggle, no PTT semantics)
+        if let Some(config_id) = binding_id.strip_prefix("language:") {
+            if let Some(config) = settings
+                .language_configs
+                .iter()
+                .find(|c| c.id == config_id)
+                .cloned()
+            {
+                apply_language_config(app, config);
+            }
+            return;
+        }
+
         if let Some(action) = ACTION_MAP.get(&binding_id) {
             if settings.push_to_talk {
                 action.start(app, &binding_id, &shortcut_string);
@@ -291,6 +328,11 @@ fn trigger_shortcut_if_registered(app: &AppHandle, rt: &ShortcutRuntime, combo: 
 /// Stop a shortcut action if it's registered and in PTT mode
 fn stop_shortcut_if_registered_ptt(app: &AppHandle, rt: &ShortcutRuntime, combo: &str) {
     if let Some(binding_id) = rt.combo_to_id.get(combo).cloned() {
+        // Language shortcuts are instant-fire; skip PTT stop
+        if binding_id == "language_cycle" || binding_id.starts_with("language:") {
+            return;
+        }
+
         let shortcut_string = combo.to_string();
         let settings = get_settings(app);
         if settings.push_to_talk {
@@ -373,5 +415,222 @@ fn _unregister_shortcut(_app: &AppHandle, binding: ShortcutBinding) -> Result<()
     // Remove binding by id
     rt.bindings_by_id.remove(&binding.id);
 
+    Ok(())
+}
+
+// ── Language action helpers ──────────────────────────────────────────────────
+
+/// Apply the next language in the cycle, wrapping around at the end.
+fn apply_language_cycle(app: &AppHandle, settings: &settings::AppSettings) {
+    let configs = &settings.language_configs;
+    if configs.is_empty() {
+        return;
+    }
+
+    let current_lang = &settings.selected_language;
+    let current_idx = configs.iter().position(|c| c.language == *current_lang);
+
+    let next_idx = match current_idx {
+        Some(idx) => (idx + 1) % configs.len(),
+        None => 0,
+    };
+
+    let next_config = configs[next_idx].clone();
+    apply_language_config(app, next_config);
+}
+
+/// Apply a specific language configuration (language + optional prompt + optional model override).
+fn apply_language_config(app: &AppHandle, config: LanguageConfig) {
+    let mut settings = get_settings(app);
+
+    settings.selected_language = config.language.clone();
+
+    if let Some(ref prompt_id) = config.prompt_id {
+        if !prompt_id.is_empty() {
+            settings.post_process_selected_prompt_id = Some(prompt_id.clone());
+        }
+    }
+
+    if let Some(ref model) = config.model {
+        if !model.is_empty() {
+            let provider_id = settings.post_process_provider_id.clone();
+            settings
+                .post_process_models
+                .insert(provider_id, model.clone());
+        }
+    }
+
+    settings::write_settings(app, settings);
+
+    let _ = app.emit(
+        "language-changed",
+        serde_json::json!({
+            "language": config.language,
+            "config_id": config.id,
+        }),
+    );
+}
+
+// ── Language shortcut commands ───────────────────────────────────────────────
+
+/// Save an updated list of language configs and (re)register their shortcuts.
+#[tauri::command]
+pub fn update_language_configs(app: AppHandle, configs: Vec<LanguageConfig>) -> Result<(), String> {
+    let current_settings = get_settings(&app);
+
+    // Unregister all old language shortcuts from runtime
+    {
+        let rt_arc = get_runtime().clone();
+        let mut rt = rt_arc.lock().unwrap();
+        for config in &current_settings.language_configs {
+            if !config.shortcut_binding.is_empty() {
+                if let Ok(combo) = normalize_shortcut_string(&config.shortcut_binding) {
+                    let binding_id = format!("language:{}", config.id);
+                    if rt.combo_to_id.get(&combo) == Some(&binding_id) {
+                        rt.combo_to_id.remove(&combo);
+                    }
+                }
+            }
+        }
+    }
+
+    // Save updated configs
+    let mut updated_settings = current_settings;
+    updated_settings.language_configs = configs.clone();
+    settings::write_settings(&app, updated_settings);
+
+    // Register new language shortcuts
+    {
+        let rt_arc = get_runtime().clone();
+        let mut rt = rt_arc.lock().unwrap();
+        for config in &configs {
+            if !config.shortcut_binding.is_empty() {
+                if let Ok(combo) = normalize_shortcut_string(&config.shortcut_binding) {
+                    let binding_id = format!("language:{}", config.id);
+                    rt.combo_to_id.insert(combo, binding_id);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Save the language cycle shortcut and (re)register it.
+#[tauri::command]
+pub fn update_language_cycle_shortcut(app: AppHandle, shortcut: String) -> Result<(), String> {
+    let current_settings = get_settings(&app);
+
+    // Unregister old cycle shortcut
+    {
+        let rt_arc = get_runtime().clone();
+        let mut rt = rt_arc.lock().unwrap();
+        if !current_settings.language_cycle_shortcut.is_empty() {
+            if let Ok(combo) = normalize_shortcut_string(&current_settings.language_cycle_shortcut)
+            {
+                if rt.combo_to_id.get(&combo) == Some(&"language_cycle".to_string()) {
+                    rt.combo_to_id.remove(&combo);
+                }
+            }
+        }
+    }
+
+    // Save new shortcut
+    let mut updated_settings = current_settings;
+    updated_settings.language_cycle_shortcut = shortcut.clone();
+    settings::write_settings(&app, updated_settings);
+
+    // Register new cycle shortcut
+    if !shortcut.is_empty() {
+        if let Ok(combo) = normalize_shortcut_string(&shortcut) {
+            let rt_arc = get_runtime().clone();
+            let mut rt = rt_arc.lock().unwrap();
+            rt.combo_to_id.insert(combo, "language_cycle".to_string());
+        }
+    }
+
+    Ok(())
+}
+
+/// Temporarily unregister a per-language shortcut while the user is editing it.
+#[tauri::command]
+pub fn suspend_language_shortcut(app: AppHandle, config_id: String) -> Result<(), String> {
+    let settings = get_settings(&app);
+    if let Some(config) = settings.language_configs.iter().find(|c| c.id == config_id) {
+        if !config.shortcut_binding.is_empty() {
+            if let Ok(combo) = normalize_shortcut_string(&config.shortcut_binding) {
+                let rt_arc = get_runtime().clone();
+                let mut rt = rt_arc.lock().unwrap();
+                let binding_id = format!("language:{}", config_id);
+                if rt.combo_to_id.get(&combo) == Some(&binding_id) {
+                    rt.combo_to_id.remove(&combo);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Re-register a per-language shortcut after the user finishes editing.
+#[tauri::command]
+pub fn resume_language_shortcut(app: AppHandle, config_id: String) -> Result<(), String> {
+    let settings = get_settings(&app);
+    if let Some(config) = settings.language_configs.iter().find(|c| c.id == config_id) {
+        if !config.shortcut_binding.is_empty() {
+            if let Ok(combo) = normalize_shortcut_string(&config.shortcut_binding) {
+                let rt_arc = get_runtime().clone();
+                let mut rt = rt_arc.lock().unwrap();
+                let binding_id = format!("language:{}", config_id);
+                if let Some(existing_id) = rt.combo_to_id.get(&combo) {
+                    if existing_id != &binding_id {
+                        return Err(format!(
+                            "Shortcut '{}' is already in use",
+                            config.shortcut_binding
+                        ));
+                    }
+                }
+                rt.combo_to_id.insert(combo, binding_id);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Temporarily unregister the language cycle shortcut while the user is editing it.
+#[tauri::command]
+pub fn suspend_language_cycle_shortcut(app: AppHandle) -> Result<(), String> {
+    let settings = get_settings(&app);
+    if !settings.language_cycle_shortcut.is_empty() {
+        if let Ok(combo) = normalize_shortcut_string(&settings.language_cycle_shortcut) {
+            let rt_arc = get_runtime().clone();
+            let mut rt = rt_arc.lock().unwrap();
+            if rt.combo_to_id.get(&combo) == Some(&"language_cycle".to_string()) {
+                rt.combo_to_id.remove(&combo);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Re-register the language cycle shortcut after the user finishes editing.
+#[tauri::command]
+pub fn resume_language_cycle_shortcut(app: AppHandle) -> Result<(), String> {
+    let settings = get_settings(&app);
+    if !settings.language_cycle_shortcut.is_empty() {
+        if let Ok(combo) = normalize_shortcut_string(&settings.language_cycle_shortcut) {
+            let rt_arc = get_runtime().clone();
+            let mut rt = rt_arc.lock().unwrap();
+            let binding_id = "language_cycle".to_string();
+            if let Some(existing_id) = rt.combo_to_id.get(&combo) {
+                if existing_id != &binding_id {
+                    return Err(format!(
+                        "Shortcut '{}' is already in use",
+                        settings.language_cycle_shortcut
+                    ));
+                }
+            }
+            rt.combo_to_id.insert(combo, binding_id);
+        }
+    }
     Ok(())
 }

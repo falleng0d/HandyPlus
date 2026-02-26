@@ -143,6 +143,10 @@ const settingUpdaters: {
     invoke("change_on_recording_start_script_setting", { script: value }),
   on_recording_end_script: (value) =>
     invoke("change_on_recording_end_script_setting", { script: value }),
+  language_configs: (value) =>
+    invoke("update_language_configs", { configs: value }),
+  language_cycle_shortcut: (value) =>
+    invoke("update_language_cycle_shortcut", { shortcut: value }),
 };
 
 export const useSettingsStore = create<SettingsStore>()(

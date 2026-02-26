@@ -101,7 +101,8 @@ async fn maybe_post_process_transcription(
     let dictionary_str = settings.custom_words.join(", ");
     let processed_prompt = prompt
         .replace("${output}", transcription)
-        .replace("${dictionary}", &dictionary_str);
+        .replace("${dictionary}", &dictionary_str)
+        .replace("${language}", &settings.selected_language);
     debug!("Processed prompt length: {} chars", processed_prompt.len());
 
     // Create OpenAI-compatible client
