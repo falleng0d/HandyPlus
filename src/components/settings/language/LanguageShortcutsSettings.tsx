@@ -4,13 +4,14 @@ import { SettingsGroup } from "../../ui";
 import { SettingContainer } from "../../ui";
 import { Dropdown } from "../../ui";
 import { ShortcutRecorder } from "../../ui/ShortcutRecorder";
+import { ResetButton } from "../../ui/ResetButton";
 import { LanguageConfigRow } from "./LanguageConfigRow";
 import { useSettings } from "../../../hooks/useSettings";
 import { LANGUAGES } from "../../../lib/constants/languages";
 import type { LanguageConfig } from "../../../lib/types";
 
 export const LanguageShortcutsSettings: React.FC = () => {
-  const { settings, updateSetting } = useSettings();
+  const { settings, updateSetting, isUpdating } = useSettings();
   const [addLanguageValue, setAddLanguageValue] = useState<string | null>(null);
 
   const languageConfigs = settings?.language_configs ?? [];
@@ -65,6 +66,10 @@ export const LanguageShortcutsSettings: React.FC = () => {
     [updateSetting],
   );
 
+  const handleCycleShortcutReset = useCallback(() => {
+    void updateSetting("language_cycle_shortcut", "");
+  }, [updateSetting]);
+
   const handleCycleShortcutSuspend = async () => {
     await invoke("suspend_language_cycle_shortcut");
   };
@@ -83,13 +88,23 @@ export const LanguageShortcutsSettings: React.FC = () => {
           layout="horizontal"
           grouped={true}
         >
-          <ShortcutRecorder
-            value={cycleShortcut}
-            onChange={handleCycleShortcutChange}
-            placeholder="No shortcut"
-            onSuspend={handleCycleShortcutSuspend}
-            onResume={handleCycleShortcutResume}
-          />
+          <div className="flex items-center gap-1">
+            <ShortcutRecorder
+              value={cycleShortcut}
+              onChange={handleCycleShortcutChange}
+              placeholder="No shortcut"
+              onSuspend={handleCycleShortcutSuspend}
+              onResume={handleCycleShortcutResume}
+            />
+            <ResetButton
+              onClick={handleCycleShortcutReset}
+              disabled={
+                cycleShortcut.trim() === "" ||
+                isUpdating("language_cycle_shortcut")
+              }
+              ariaLabel="Reset cycle language shortcut"
+            />
+          </div>
         </SettingContainer>
 
         <SettingContainer
