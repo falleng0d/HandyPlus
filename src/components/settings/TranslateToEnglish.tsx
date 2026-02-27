@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { ToggleSwitch } from "../ui";
 import { useSettings } from "../../hooks/useSettings";
-import { useModelsContext } from "../../contexts/ModelsContext.tsx";
+import { useModelsContext } from "../../contexts/ModelsContext";
 
 interface TranslateToEnglishProps {
   descriptionMode?: "inline" | "tooltip";

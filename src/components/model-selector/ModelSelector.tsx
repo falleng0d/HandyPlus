@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import ModelStatusButton from "./ModelStatusButton";
 import ModelDropdown from "./ModelDropdown";
 import DownloadProgressDisplay from "./DownloadProgressDisplay";
-import { useModelsContext } from "../../contexts/ModelsContext.tsx";
+import { useModelsContext } from "../../contexts/ModelsContext";
 
 interface ModelSelectorProps {
   onError?: (error: string) => void;

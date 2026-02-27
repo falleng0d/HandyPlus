@@ -7,7 +7,7 @@ import { ResetButton } from "../../ui/ResetButton";
 import { useSettings } from "../../../hooks/useSettings";
 import { LANGUAGES } from "../../../lib/constants/languages";
 import type { LanguageConfig } from "../../../lib/types";
-import { useModelsContext } from "../../../contexts/ModelsContext.tsx";
+import { useModelsContext } from "../../../contexts/ModelsContext";
 
 interface LanguageConfigRowProps {
   config: LanguageConfig;
