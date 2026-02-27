@@ -17,6 +17,7 @@ import { ModelSelect } from "../PostProcessingSettingsApi/ModelSelect";
 import { usePostProcessProviderState } from "../PostProcessingSettingsApi/usePostProcessProviderState";
 import { useSettings } from "../../../hooks/useSettings";
 import type { LLMPrompt } from "../../../lib/types";
+import { useSelectedPromptContext } from "../../../contexts/SelectedPromptContext.tsx";
 
 const DisabledNotice: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -139,15 +140,15 @@ const PostProcessingSettingsApiComponent: React.FC = () => {
 };
 
 const PostProcessingSettingsPromptsComponent: React.FC = () => {
-  const { getSetting, updateSetting, isUpdating, refreshSettings } =
-    useSettings();
+  const { getSetting, refreshSettings } = useSettings();
+  const { selectedPromptId, setSelectedPromptId, isUpdating } =
+    useSelectedPromptContext();
   const [isCreating, setIsCreating] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftText, setDraftText] = useState("");
 
   const enabled = getSetting("post_process_enabled") || false;
   const prompts = getSetting("post_process_prompts") || [];
-  const selectedPromptId = getSetting("post_process_selected_prompt_id") || "";
   const selectedPrompt =
     prompts.find((prompt) => prompt.id === selectedPromptId) || null;
 
@@ -170,7 +171,7 @@ const PostProcessingSettingsPromptsComponent: React.FC = () => {
 
   const handlePromptSelect = (promptId: string | null) => {
     if (!promptId) return;
-    updateSetting("post_process_selected_prompt_id", promptId);
+    void setSelectedPromptId(promptId);
     setIsCreating(false);
   };
 
@@ -183,7 +184,7 @@ const PostProcessingSettingsPromptsComponent: React.FC = () => {
         prompt: draftText.trim(),
       });
       await refreshSettings();
-      updateSetting("post_process_selected_prompt_id", newPrompt.id);
+      await setSelectedPromptId(newPrompt.id);
       setIsCreating(false);
     } catch (error) {
       console.error("Failed to create prompt:", error);
@@ -269,9 +270,7 @@ const PostProcessingSettingsPromptsComponent: React.FC = () => {
             placeholder={
               prompts.length === 0 ? "No prompts available" : "Select a prompt"
             }
-            disabled={
-              isUpdating("post_process_selected_prompt_id") || isCreating
-            }
+            disabled={isUpdating || isCreating}
             className="flex-1"
           />
           <Button

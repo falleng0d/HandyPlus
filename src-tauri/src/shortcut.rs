@@ -532,11 +532,14 @@ fn download_and_load_model(
 
 /// Emit a language-changed event to notify the frontend.
 fn emit_language_changed_event(app: &AppHandle, config: &LanguageConfig) {
+    let settings = get_settings(app);
+
     let _ = app.emit(
         "language-changed",
         serde_json::json!({
             "language": config.language,
             "config_id": config.id,
+            "prompt_id": settings.post_process_selected_prompt_id,
         }),
     );
 }
