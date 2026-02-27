@@ -1,7 +1,5 @@
 # AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Development Commands
 
 **Prerequisites:**
@@ -17,26 +15,12 @@ bun install
 
 # Run in development mode
 bun run tauri dev
-# If cmake error on macOS:
-CMAKE_POLICY_VERSION_MINIMUM=3.5 bun run tauri dev
 
 # Build for production
 bun run tauri build
 
 # Frontend only development
 bun run dev        # Start Vite dev server
-bun run build      # Build frontend (TypeScript + Vite)
-bun run preview    # Preview built frontend
-```
-
-**Model Setup (Required for Development):**
-
-```bash
-# Create models directory
-mkdir -p src-tauri/resources/models
-
-# Download required VAD model
-curl -o src-tauri/resources/models/silero_vad_v4.onnx https://blob.handy.computer/silero_vad_v4.onnx
 ```
 
 ## Architecture Overview
@@ -55,7 +39,8 @@ Handy is a cross-platform desktop speech-to-text application built with Tauri (R
 - `audio_toolkit/` - Low-level audio processing:
   - `audio/` - Device enumeration, recording, resampling
   - `vad/` - Voice Activity Detection using Silero VAD
-- `commands/` - Tauri command handlers for frontend communication
+- `command.rs` - Tauri command handlers for frontend communication
+- `commands/` - More tauri command handlers for frontend communication divided by feature
 - `shortcut.rs` - Global keyboard shortcut handling
 - `settings.rs` - Application settings management
 
@@ -108,6 +93,7 @@ Settings are stored using Tauri's store plugin with reactive updates:
 - Audio devices (microphone/output selection)
 - Model preferences (Small/Medium/Turbo/Large Whisper variants)
 - Audio feedback and translation options
+- Post-processing options (LLM provider, model, prompt, API key)
 
 ### Single Instance Architecture
 
