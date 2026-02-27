@@ -6,6 +6,7 @@ mod command;
 mod commands;
 mod dragon;
 mod hotkey;
+mod language_labels;
 mod llm_client;
 mod managers;
 mod overlay;

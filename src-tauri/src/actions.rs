@@ -1,4 +1,5 @@
 use crate::audio_feedback::{play_feedback_sound, SoundType};
+use crate::language_labels::language_label_for_code;
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::history::HistoryManager;
 use crate::managers::transcription::TranscriptionManager;
@@ -99,10 +100,11 @@ async fn maybe_post_process_transcription(
 
     // Replace variables in the prompt
     let dictionary_str = settings.custom_words.join(", ");
+    let language_label = language_label_for_code(&settings.selected_language);
     let processed_prompt = prompt
         .replace("${output}", transcription)
         .replace("${dictionary}", &dictionary_str)
-        .replace("${language}", &settings.selected_language);
+        .replace("${language}", &language_label);
     debug!("Processed prompt length: {} chars", processed_prompt.len());
 
     // Create OpenAI-compatible client

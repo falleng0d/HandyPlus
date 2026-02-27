@@ -36,6 +36,21 @@ export const SelectedLanguageProvider: React.FC<{
     settings?.selected_language ?? "auto",
   );
 
+  const updateSelectedLanguageInSettings = useCallback(
+    (language: string) => {
+      const currentSettings = useSettingsStore.getState().settings;
+      setSettings(
+        currentSettings
+          ? {
+              ...currentSettings,
+              selected_language: language,
+            }
+          : currentSettings,
+      );
+    },
+    [setSettings],
+  );
+
   useEffect(() => {
     setSelectedLanguageState(settings?.selected_language ?? "auto");
   }, [settings?.selected_language]);
@@ -50,22 +65,14 @@ export const SelectedLanguageProvider: React.FC<{
         }
 
         setSelectedLanguageState(language);
-        const currentSettings = useSettingsStore.getState().settings;
-        setSettings(
-          currentSettings
-            ? {
-                ...currentSettings,
-                selected_language: language,
-              }
-            : currentSettings,
-        );
+        updateSelectedLanguageInSettings(language);
       },
     );
 
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [setSettings]);
+  }, [updateSelectedLanguageInSettings]);
 
   const setSelectedLanguage = useCallback(
     async (language: string) => {
@@ -74,15 +81,17 @@ export const SelectedLanguageProvider: React.FC<{
       }
 
       setSelectedLanguageState(language);
+      updateSelectedLanguageInSettings(language);
       await updateSetting("selected_language", language);
     },
-    [updateSetting],
+    [updateSelectedLanguageInSettings, updateSetting],
   );
 
   const resetSelectedLanguage = useCallback(async () => {
     setSelectedLanguageState("auto");
+    updateSelectedLanguageInSettings("auto");
     await resetSetting("selected_language");
-  }, [resetSetting]);
+  }, [resetSetting, updateSelectedLanguageInSettings]);
 
   const value = useMemo<SelectedLanguageContextValue>(
     () => ({
