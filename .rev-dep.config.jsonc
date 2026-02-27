@@ -1,0 +1,46 @@
+{
+  "configVersion": "1.5",
+  "$schema": "https://github.com/jayu/rev-dep/blob/master/config-schema/1.5.schema.json?raw=true",
+  "ignoreFiles": ["**/node_modules/**"],
+  "rules": [
+    {
+      "path": ".",
+      "moduleBoundaries": [
+        {
+          "name": "src",
+          "pattern": "src/**/*",
+          "allow": [
+            "src/**/*"
+          ]
+        }
+      ],
+      "circularImportsDetection": {
+        "enabled": true,
+        "ignoreTypeImports": false
+      },
+      "orphanFilesDetection": {
+        "enabled": false
+      },
+      "unusedNodeModulesDetection": {
+        "enabled": true,
+        "excludeModules": [
+          "@tauri-apps/plugin-autostart",
+          "@tauri-apps/plugin-clipboard-manager",
+          "@tauri-apps/plugin-fs",
+          "@tauri-apps/plugin-global-shortcut",
+          "@tauri-apps/plugin-sql",
+          "tailwindcss"
+        ]
+      },
+      "missingNodeModulesDetection": {
+        "enabled": false
+      },
+      "unusedExportsDetection": {
+        "enabled": false
+      },
+      "unresolvedImportsDetection": {
+        "enabled": true
+      }
+    }
+  ]
+}
