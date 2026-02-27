@@ -6,6 +6,8 @@ use crate::hotkey::{
     is_modifier_key, key_to_name, modifier_key_to_specific_name, normalize_combo_from_parts,
     normalize_shortcut_string, validate_shortcut_string,
 };
+use crate::managers::model::ModelManager;
+use crate::managers::transcription::TranscriptionManager;
 use crate::settings::ShortcutBinding;
 use crate::settings::{self, get_settings, LanguageConfig};
 use crate::ManagedToggleState;
@@ -439,8 +441,19 @@ fn apply_language_cycle(app: &AppHandle, settings: &settings::AppSettings) {
     apply_language_config(app, next_config);
 }
 
-/// Apply a specific language configuration (language + optional prompt + optional model override).
+/// Apply a specific language configuration (language + optional prompt + optional dictation model override).
 fn apply_language_config(app: &AppHandle, config: LanguageConfig) {
+    update_language_settings(app, &config);
+
+    if let Some(model_id) = config.model.clone().filter(|m| !m.is_empty()) {
+        apply_model_override(app, &model_id);
+    }
+
+    emit_language_changed_event(app, &config);
+}
+
+/// Update settings with language, prompt, and model selections from the config.
+fn update_language_settings(app: &AppHandle, config: &LanguageConfig) {
     let mut settings = get_settings(app);
 
     settings.selected_language = config.language.clone();
@@ -451,17 +464,74 @@ fn apply_language_config(app: &AppHandle, config: LanguageConfig) {
         }
     }
 
-    if let Some(ref model) = config.model {
-        if !model.is_empty() {
-            let provider_id = settings.post_process_provider_id.clone();
-            settings
-                .post_process_models
-                .insert(provider_id, model.clone());
+    if let Some(ref model_id) = config.model {
+        if !model_id.is_empty() {
+            settings.selected_model = model_id.clone();
         }
     }
 
     settings::write_settings(app, settings);
+}
 
+/// Handle loading or downloading a model override.
+fn apply_model_override(app: &AppHandle, model_id: &str) {
+    let model_manager = app.state::<Arc<ModelManager>>().inner().clone();
+    let transcription_manager = app.state::<Arc<TranscriptionManager>>().inner().clone();
+
+    match model_manager.get_model_info(model_id) {
+        Some(model_info) if model_info.is_downloaded => {
+            load_model_in_thread(transcription_manager, model_id);
+        }
+        Some(model_info) if !model_info.is_downloading => {
+            download_and_load_model(model_manager, transcription_manager, model_id);
+        }
+        None => {
+            eprintln!("Language override model '{}' not found", model_id);
+        }
+        _ => {} // Already downloading, do nothing
+    }
+}
+
+/// Load a model in a background thread.
+fn load_model_in_thread(transcription_manager: Arc<TranscriptionManager>, model_id: &str) {
+    let model_id = model_id.to_string();
+    std::thread::spawn(move || {
+        if let Err(e) = transcription_manager.load_model(&model_id) {
+            eprintln!(
+                "Failed to load language override model '{}': {}",
+                model_id, e
+            );
+        }
+    });
+}
+
+/// Download a model and then load it.
+fn download_and_load_model(
+    model_manager: Arc<ModelManager>,
+    transcription_manager: Arc<TranscriptionManager>,
+    model_id: &str,
+) {
+    let model_id = model_id.to_string();
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = model_manager.download_model(&model_id).await {
+            eprintln!(
+                "Failed to download language override model '{}': {}",
+                model_id, e
+            );
+            return;
+        }
+
+        if let Err(e) = transcription_manager.load_model(&model_id) {
+            eprintln!(
+                "Failed to load language override model '{}': {}",
+                model_id, e
+            );
+        }
+    });
+}
+
+/// Emit a language-changed event to notify the frontend.
+fn emit_language_changed_event(app: &AppHandle, config: &LanguageConfig) {
     let _ = app.emit(
         "language-changed",
         serde_json::json!({
