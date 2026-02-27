@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
-import { SettingContainer } from "../ui/SettingContainer";
+import { SettingContainer } from "../ui";
 import { ResetButton } from "../ui/ResetButton";
 import { useSettings } from "../../hooks/useSettings";
-import { useModels } from "../../hooks/useModels";
 import { LANGUAGES } from "../../lib/constants/languages";
+import { useModelsContext } from "../../contexts/ModelsContext.tsx";
 
 interface LanguageSelectorProps {
   descriptionMode?: "inline" | "tooltip";
@@ -18,7 +17,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
   grouped = false,
 }) => {
   const { getSetting, updateSetting, resetSetting, isUpdating } = useSettings();
-  const { currentModel, loadCurrentModel } = useModels();
+  const { currentModel } = useModelsContext();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -43,17 +42,6 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
-
-  // Listen for model state changes to update UI reactively
-  useEffect(() => {
-    const modelStateUnlisten = listen("model-state-changed", () => {
-      loadCurrentModel();
-    });
-
-    return () => {
-      modelStateUnlisten.then((fn) => fn());
-    };
-  }, [loadCurrentModel]);
 
   useEffect(() => {
     if (isOpen && searchInputRef.current) {

@@ -3,11 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { X } from "lucide-react";
 import { ShortcutRecorder } from "../../ui/ShortcutRecorder";
 import { Dropdown } from "../../ui";
-import { Select } from "../../ui/Select";
 import { ResetButton } from "../../ui/ResetButton";
 import { useSettings } from "../../../hooks/useSettings";
 import { LANGUAGES } from "../../../lib/constants/languages";
 import type { LanguageConfig } from "../../../lib/types";
+import { useModelsContext } from "../../../contexts/ModelsContext.tsx";
 
 interface LanguageConfigRowProps {
   config: LanguageConfig;
@@ -20,7 +20,8 @@ export const LanguageConfigRow: React.FC<LanguageConfigRowProps> = ({
   onUpdate,
   onRemove,
 }) => {
-  const { settings, postProcessModelOptions } = useSettings();
+  const { settings } = useSettings();
+  const { models, downloadModel } = useModelsContext();
 
   const languageLabel =
     LANGUAGES.find((l) => l.value === config.language)?.label ??
@@ -35,32 +36,39 @@ export const LanguageConfigRow: React.FC<LanguageConfigRowProps> = ({
     [prompts],
   );
 
-  const providerId = settings?.post_process_provider_id ?? "openai";
-  const rawModelOptions = postProcessModelOptions[providerId] ?? [];
   const modelOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const options: { value: string; label: string }[] = [];
-    for (const m of rawModelOptions) {
-      if (m && !seen.has(m)) {
-        seen.add(m);
-        options.push({ value: m, label: m });
-      }
-    }
-    // Ensure current value is present
-    if (config.model && !seen.has(config.model)) {
+    const options: { value: string; label: string }[] = [
+      { value: "", label: "Default" },
+      ...[...models]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((model) => ({
+          value: model.id,
+          label: model.is_downloaded ? model.name : `${model.name} (download)`,
+        })),
+    ];
+
+    if (
+      config.model &&
+      !options.some((option) => option.value === config.model)
+    ) {
       options.push({ value: config.model, label: config.model });
     }
+
     return options;
-  }, [rawModelOptions, config.model]);
+  }, [models, config.model]);
 
-  const handleModelChange = (value: string | null) => {
-    onUpdate({ ...config, model: value ?? null });
-  };
+  const handleModelChange = async (value: string) => {
+    const modelId = value === "" ? null : value;
+    onUpdate({ ...config, model: modelId });
 
-  const handleModelCreate = (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    onUpdate({ ...config, model: trimmed });
+    if (!modelId) {
+      return;
+    }
+
+    const selected = models.find((model) => model.id === modelId);
+    if (selected && !selected.is_downloaded && !selected.is_downloading) {
+      await downloadModel(modelId, { activateAfterDownload: false });
+    }
   };
 
   const handlePromptChange = (value: string) => {
@@ -103,16 +111,17 @@ export const LanguageConfigRow: React.FC<LanguageConfigRowProps> = ({
       {/* Language label */}
       <span className="text-sm font-medium w-24 flex-1">{languageLabel}</span>
 
-      {/* Model override */}
-      <Select
-        value={config.model ?? null}
+      {/* Dictation model override */}
+      <Dropdown
+        selectedValue={config.model ?? ""}
         options={modelOptions}
-        onChange={handleModelChange}
-        onCreateOption={handleModelCreate}
+        onSelect={(value) => {
+          void handleModelChange(value);
+        }}
         placeholder="Default"
-        isCreatable
-        formatCreateLabel={(input) => `Use "${input}"`}
-        className="w-32 text-sm"
+        className="w-40"
+        wide={false}
+        buttonClassName="h-10"
       />
 
       {/* Prompt override */}

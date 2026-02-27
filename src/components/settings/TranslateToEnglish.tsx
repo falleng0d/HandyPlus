@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo } from "react";
-import { listen } from "@tauri-apps/api/event";
-import { ToggleSwitch } from "../ui/ToggleSwitch";
+import React, { useMemo } from "react";
+import { ToggleSwitch } from "../ui";
 import { useSettings } from "../../hooks/useSettings";
-import { useModels } from "../../hooks/useModels";
+import { useModelsContext } from "../../contexts/ModelsContext.tsx";
 
 interface TranslateToEnglishProps {
   descriptionMode?: "inline" | "tooltip";
@@ -18,7 +17,7 @@ const unsupportedTranslationModels = [
 export const TranslateToEnglish: React.FC<TranslateToEnglishProps> = React.memo(
   ({ descriptionMode = "tooltip", grouped = false }) => {
     const { getSetting, updateSetting, isUpdating } = useSettings();
-    const { currentModel, loadCurrentModel, models } = useModels();
+    const { currentModel, models } = useModelsContext();
 
     const translateToEnglish = getSetting("translate_to_english") || false;
     const isDisabledTranslation =
@@ -34,17 +33,6 @@ export const TranslateToEnglish: React.FC<TranslateToEnglishProps> = React.memo(
 
       return "Automatically translate speech from other languages to English during transcription.";
     }, [models, currentModel, isDisabledTranslation]);
-
-    // Listen for model state changes to update UI reactively
-    useEffect(() => {
-      const modelStateUnlisten = listen("model-state-changed", () => {
-        loadCurrentModel();
-      });
-
-      return () => {
-        modelStateUnlisten.then((fn) => fn());
-      };
-    }, [loadCurrentModel]);
 
     return (
       <ToggleSwitch
