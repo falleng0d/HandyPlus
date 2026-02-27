@@ -29,6 +29,7 @@ export const SelectedPromptProvider: React.FC<{
   children: React.ReactNode;
 }> = ({ children }) => {
   const settings = useSettingsStore((state) => state.settings);
+  const setSettings = useSettingsStore((state) => state.setSettings);
   const updateSetting = useSettingsStore((state) => state.updateSetting);
   const isUpdatingKey = useSettingsStore((state) => state.isUpdatingKey);
 
@@ -45,7 +46,18 @@ export const SelectedPromptProvider: React.FC<{
       "language-changed",
       (event) => {
         if (Object.prototype.hasOwnProperty.call(event.payload, "prompt_id")) {
-          setSelectedPromptIdState(event.payload.prompt_id ?? "");
+          const promptId = event.payload.prompt_id ?? "";
+          setSelectedPromptIdState(promptId);
+
+          const currentSettings = useSettingsStore.getState().settings;
+          setSettings(
+            currentSettings
+              ? {
+                  ...currentSettings,
+                  post_process_selected_prompt_id: promptId || null,
+                }
+              : currentSettings,
+          );
         }
       },
     );
@@ -53,7 +65,7 @@ export const SelectedPromptProvider: React.FC<{
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, []);
+  }, [setSettings]);
 
   const setSelectedPromptId = useCallback(
     async (promptId: string) => {

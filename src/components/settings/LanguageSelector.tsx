@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SettingContainer } from "../ui";
 import { ResetButton } from "../ui/ResetButton";
-import { useSettings } from "../../hooks/useSettings";
 import { LANGUAGES } from "../../lib/constants/languages";
-import { useModelsContext } from "../../contexts/ModelsContext.tsx";
+import { useModelsContext } from "../../contexts/ModelsContext";
+import { useSelectedLanguageContext } from "../../contexts/SelectedLanguageContext";
 
 interface LanguageSelectorProps {
   descriptionMode?: "inline" | "tooltip";
@@ -16,14 +16,18 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
   descriptionMode = "tooltip",
   grouped = false,
 }) => {
-  const { getSetting, updateSetting, resetSetting, isUpdating } = useSettings();
+  const {
+    selectedLanguage,
+    setSelectedLanguage,
+    resetSelectedLanguage,
+    isUpdating,
+  } = useSelectedLanguageContext();
   const { currentModel } = useModelsContext();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const selectedLanguage = getSetting("selected_language") || "auto";
   const isUnsupported = unsupportedModels.includes(currentModel);
 
   useEffect(() => {
@@ -63,17 +67,17 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
       "Auto";
 
   const handleLanguageSelect = async (languageCode: string) => {
-    await updateSetting("selected_language", languageCode);
+    await setSelectedLanguage(languageCode);
     setIsOpen(false);
     setSearchQuery("");
   };
 
   const handleReset = async () => {
-    await resetSetting("selected_language");
+    await resetSelectedLanguage();
   };
 
   const handleToggle = () => {
-    if (isUpdating("selected_language") || isUnsupported) return;
+    if (isUpdating || isUnsupported) return;
     setIsOpen(!isOpen);
   };
 
@@ -108,12 +112,12 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
           <button
             type="button"
             className={`px-2 py-1 text-sm font-semibold bg-mid-gray/10 border border-mid-gray/80 rounded min-w-[200px] text-left flex items-center justify-between transition-all duration-150 ${
-              isUpdating("selected_language") || isUnsupported
+              isUpdating || isUnsupported
                 ? "opacity-50 cursor-not-allowed"
                 : "hover:bg-logo-primary/10 cursor-pointer hover:border-logo-primary"
             }`}
             onClick={handleToggle}
-            disabled={isUpdating("selected_language") || isUnsupported}
+            disabled={isUpdating || isUnsupported}
           >
             <span className="truncate">{selectedLanguageName}</span>
             <svg
@@ -133,7 +137,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
             </svg>
           </button>
 
-          {isOpen && !isUpdating("selected_language") && !isUnsupported && (
+          {isOpen && !isUpdating && !isUnsupported && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-mid-gray/80 rounded shadow-lg z-50 max-h-60 overflow-hidden">
               {/* Search input */}
               <div className="p-2 border-b border-mid-gray/80">
@@ -177,10 +181,10 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
         </div>
         <ResetButton
           onClick={handleReset}
-          disabled={isUpdating("selected_language") || isUnsupported}
+          disabled={isUpdating || isUnsupported}
         />
       </div>
-      {isUpdating("selected_language") && (
+      {isUpdating && (
         <div className="absolute inset-0 bg-mid-gray/10 rounded flex items-center justify-center">
           <div className="w-4 h-4 border-2 border-logo-primary border-t-transparent rounded-full animate-spin"></div>
         </div>

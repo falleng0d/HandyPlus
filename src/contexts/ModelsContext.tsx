@@ -10,6 +10,7 @@ import React, {
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { ModelInfo } from "../lib/types";
+import { useSettingsStore } from "../stores/settingsStore";
 
 export type ModelStatus =
   | "ready"
@@ -77,6 +78,8 @@ const ModelsContext = createContext<ModelsContextValue | null>(null);
 export const ModelsProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  const setSettings = useSettingsStore((state) => state.setSettings);
+
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [currentModel, setCurrentModel] = useState<string>("");
   const [modelStatus, setModelStatus] = useState<ModelStatus>("unloaded");
@@ -116,6 +119,16 @@ export const ModelsProvider: React.FC<{ children: React.ReactNode }> = ({
       const current = await invoke<string>("get_current_model");
       setCurrentModel(current);
 
+      const currentSettings = useSettingsStore.getState().settings;
+      setSettings(
+        currentSettings
+          ? {
+              ...currentSettings,
+              selected_model: current,
+            }
+          : currentSettings,
+      );
+
       if (current) {
         const transcriptionStatus = await invoke<string | null>(
           "get_transcription_model_status",
@@ -133,7 +146,7 @@ export const ModelsProvider: React.FC<{ children: React.ReactNode }> = ({
       setModelStatus("error");
       setModelError("Failed to check model status");
     }
-  }, []);
+  }, [setSettings]);
 
   const checkFirstRun = useCallback(async () => {
     try {
@@ -147,20 +160,34 @@ export const ModelsProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const selectModel = useCallback(async (modelId: string) => {
-    try {
-      setModelError(null);
-      await invoke("set_active_model", { modelId });
-      setCurrentModel(modelId);
-      setIsFirstRun(false);
-      setHasAnyModels(true);
-      return true;
-    } catch (err) {
-      setModelError(`Failed to switch to model: ${err}`);
-      setModelStatus("error");
-      return false;
-    }
-  }, []);
+  const selectModel = useCallback(
+    async (modelId: string) => {
+      try {
+        setModelError(null);
+        await invoke("set_active_model", { modelId });
+        setCurrentModel(modelId);
+
+        const currentSettings = useSettingsStore.getState().settings;
+        setSettings(
+          currentSettings
+            ? {
+                ...currentSettings,
+                selected_model: modelId,
+              }
+            : currentSettings,
+        );
+
+        setIsFirstRun(false);
+        setHasAnyModels(true);
+        return true;
+      } catch (err) {
+        setModelError(`Failed to switch to model: ${err}`);
+        setModelStatus("error");
+        return false;
+      }
+    },
+    [setSettings],
+  );
 
   const downloadModel = useCallback(
     async (modelId: string, options?: DownloadModelOptions) => {
@@ -302,6 +329,22 @@ export const ModelsProvider: React.FC<{ children: React.ReactNode }> = ({
     models,
   ]);
 
+  const updateModelAndSettings = useCallback(
+    (modelId: string) => {
+      setCurrentModel(modelId);
+      const currentSettings = useSettingsStore.getState().settings;
+      setSettings(
+        currentSettings
+          ? {
+              ...currentSettings,
+              selected_model: modelId,
+            }
+          : currentSettings,
+      );
+    },
+    [setSettings],
+  );
+
   useEffect(() => {
     void loadModels();
     void loadCurrentModel();
@@ -316,11 +359,16 @@ export const ModelsProvider: React.FC<{ children: React.ReactNode }> = ({
           case "loading_started":
             setModelStatus("loading");
             setModelError(null);
+            if (model_id) {
+              updateModelAndSettings(model_id);
+            }
             break;
           case "loading_completed":
             setModelStatus("ready");
             setModelError(null);
-            if (model_id) setCurrentModel(model_id);
+            if (model_id) {
+              updateModelAndSettings(model_id);
+            }
             break;
           case "loading_failed":
             setModelStatus("error");
@@ -467,7 +515,7 @@ export const ModelsProvider: React.FC<{ children: React.ReactNode }> = ({
       extractionCompletedUnlisten.then((fn) => fn());
       extractionFailedUnlisten.then((fn) => fn());
     };
-  }, [checkFirstRun, loadCurrentModel, loadModels, selectModel]);
+  }, [checkFirstRun, loadCurrentModel, loadModels, selectModel, setSettings, updateModelAndSettings]);
 
   const value = useMemo<ModelsContextValue>(
     () => ({
