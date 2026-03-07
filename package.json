@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build:js": "tsc && vite build",
+    "build": "tauri build --config src-tauri/tauri.nosign.json",
+    "build-signed": "tauri build",
     "preview": "vite preview",
     "tauri": "tauri",
     "format": "prettier --write . && cd src-tauri && cargo fmt",
