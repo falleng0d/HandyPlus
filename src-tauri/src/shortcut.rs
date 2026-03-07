@@ -2,6 +2,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::actions::ACTION_MAP;
+use crate::audio_feedback::{play_language_shortcut_sound, SoundType};
 use crate::hotkey::{
     is_modifier_key, key_to_name, modifier_key_to_specific_name, normalize_combo_from_parts,
     normalize_shortcut_string, validate_shortcut_string,
@@ -285,7 +286,9 @@ fn trigger_shortcut_if_registered(app: &AppHandle, rt: &ShortcutRuntime, combo: 
 
         // Handle language cycle shortcut (instant toggle, no PTT semantics)
         if binding_id == "language_cycle" {
+            play_language_shortcut_sound(app, SoundType::Start);
             apply_language_cycle(app, &settings);
+            play_language_shortcut_sound(app, SoundType::Stop);
             return;
         }
 

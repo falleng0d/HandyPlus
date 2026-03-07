@@ -84,6 +84,10 @@ export const SettingsSchema = z.object({
     .enum(["marimba", "pop", "custom"])
     .optional()
     .default("marimba"),
+  language_shortcut_sound_theme: z
+    .enum(["marimba", "pop", "custom"])
+    .optional()
+    .default("marimba"),
   start_hidden: z.boolean().optional().default(false),
   autostart_enabled: z.boolean().optional().default(false),
   selected_model: z.string(),

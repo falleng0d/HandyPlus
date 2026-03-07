@@ -1,7 +1,7 @@
 use crate::audio_feedback;
 use crate::audio_toolkit::audio::{list_input_devices, list_output_devices};
 use crate::managers::audio::{AudioRecordingManager, MicrophoneMode};
-use crate::settings::{get_settings, write_settings};
+use crate::settings::{get_settings, write_settings, SoundTheme};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
@@ -148,7 +148,7 @@ pub fn get_selected_output_device(app: AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn play_test_sound(app: AppHandle, sound_type: String) {
+pub fn play_test_sound(app: AppHandle, sound_type: String, theme: Option<String>) {
     let sound = match sound_type.as_str() {
         "start" => audio_feedback::SoundType::Start,
         "stop" => audio_feedback::SoundType::Stop,
@@ -157,5 +157,10 @@ pub fn play_test_sound(app: AppHandle, sound_type: String) {
             return;
         }
     };
-    audio_feedback::play_test_sound(&app, sound);
+    let override_theme = theme.map(|value| match value.as_str() {
+        "pop" => SoundTheme::Pop,
+        "custom" => SoundTheme::Custom,
+        _ => SoundTheme::Marimba,
+    });
+    audio_feedback::play_test_sound(&app, sound, override_theme);
 }

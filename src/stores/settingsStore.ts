@@ -26,7 +26,7 @@ interface SettingsStore {
   resetBinding: (id: string) => Promise<void>;
   getSetting: <K extends keyof Settings>(key: K) => Settings[K] | undefined;
   isUpdatingKey: (key: string) => boolean;
-  playTestSound: (soundType: "start" | "stop") => Promise<void>;
+  playTestSound: (soundType: "start" | "stop", theme?: string) => Promise<void>;
   checkCustomSounds: () => Promise<void>;
   setPostProcessProvider: (providerId: string) => Promise<void>;
   updatePostProcessSetting: (
@@ -62,6 +62,7 @@ const DEFAULT_SETTINGS: Partial<Settings> = {
   audio_feedback: true,
   audio_feedback_volume: 1.0,
   sound_theme: "marimba",
+  language_shortcut_sound_theme: "marimba",
   start_hidden: false,
   autostart_enabled: false,
   push_to_talk: false,
@@ -98,6 +99,8 @@ const settingUpdaters: {
     invoke("change_audio_feedback_volume_setting", { volume: value }),
   sound_theme: (value) =>
     invoke("change_sound_theme_setting", { theme: value }),
+  language_shortcut_sound_theme: (value) =>
+    invoke("change_language_shortcut_sound_theme_setting", { theme: value }),
   start_hidden: (value) =>
     invoke("change_start_hidden_setting", { enabled: value }),
   autostart_enabled: (value) =>
@@ -255,9 +258,9 @@ export const useSettingsStore = create<SettingsStore>()(
     },
 
     // Play a test sound
-    playTestSound: async (soundType: "start" | "stop") => {
+    playTestSound: async (soundType: "start" | "stop", theme?: string) => {
       try {
-        await invoke("play_test_sound", { soundType });
+        await invoke("play_test_sound", { soundType, theme });
       } catch (error) {
         console.error(`Failed to play test sound (${soundType}):`, error);
       }

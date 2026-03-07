@@ -5,21 +5,32 @@ import { PlayIcon } from "lucide-react";
 import { SettingContainer } from "../ui/SettingContainer";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSettings } from "../../hooks/useSettings";
+import type { Settings } from "../../lib/types";
+
+type SoundSettingKey = Extract<
+  keyof Settings,
+  "sound_theme" | "language_shortcut_sound_theme"
+>;
 
 interface SoundPickerProps {
   label: string;
   description: string;
+  settingKey?: SoundSettingKey;
 }
 
 export const SoundPicker: React.FC<SoundPickerProps> = ({
   label,
   description,
+  settingKey = "sound_theme",
 }) => {
   const { getSetting, updateSetting } = useSettings();
   const playTestSound = useSettingsStore((state) => state.playTestSound);
   const customSounds = useSettingsStore((state) => state.customSounds);
 
-  const selectedTheme = getSetting("sound_theme") ?? "marimba";
+  const selectedTheme = (getSetting(settingKey) ?? "marimba") as
+    | "marimba"
+    | "pop"
+    | "custom";
 
   const options: DropdownOption[] = [
     { value: "marimba", label: "Marimba" },
@@ -32,10 +43,10 @@ export const SoundPicker: React.FC<SoundPickerProps> = ({
   }
 
   const handlePlayBothSounds = async () => {
-    await playTestSound("start");
+    await playTestSound("start", selectedTheme);
     // Wait before playing stop sound
     await new Promise((resolve) => setTimeout(resolve, 800));
-    await playTestSound("stop");
+    await playTestSound("stop", selectedTheme);
   };
 
   return (
@@ -49,7 +60,7 @@ export const SoundPicker: React.FC<SoundPickerProps> = ({
         <Dropdown
           selectedValue={selectedTheme}
           onSelect={(value) =>
-            updateSetting("sound_theme", value as "marimba" | "pop" | "custom")
+            updateSetting(settingKey, value as Settings[SoundSettingKey])
           }
           options={options}
         />

@@ -148,6 +148,14 @@ impl SoundTheme {
     }
 }
 
+pub fn parse_sound_theme(value: &str) -> SoundTheme {
+    match value.to_lowercase().as_str() {
+        "pop" => SoundTheme::Pop,
+        "custom" => SoundTheme::Custom,
+        _ => SoundTheme::Marimba,
+    }
+}
+
 /* still handy for composing the initial JSON in the store ------------- */
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppSettings {
@@ -158,6 +166,8 @@ pub struct AppSettings {
     pub audio_feedback_volume: f32,
     #[serde(default = "default_sound_theme")]
     pub sound_theme: SoundTheme,
+    #[serde(default = "default_language_shortcut_sound_theme")]
+    pub language_shortcut_sound_theme: SoundTheme,
     #[serde(default = "default_start_hidden")]
     pub start_hidden: bool,
     #[serde(default = "default_autostart_enabled")]
@@ -270,6 +280,10 @@ fn default_audio_feedback_volume() -> f32 {
 }
 
 fn default_sound_theme() -> SoundTheme {
+    SoundTheme::Marimba
+}
+
+fn default_language_shortcut_sound_theme() -> SoundTheme {
     SoundTheme::Marimba
 }
 
@@ -392,6 +406,7 @@ pub fn get_default_settings() -> AppSettings {
         audio_feedback: false,
         audio_feedback_volume: default_audio_feedback_volume(),
         sound_theme: default_sound_theme(),
+        language_shortcut_sound_theme: default_language_shortcut_sound_theme(),
         start_hidden: default_start_hidden(),
         autostart_enabled: default_autostart_enabled(),
         selected_model: "".to_string(),

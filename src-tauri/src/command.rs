@@ -52,6 +52,17 @@ pub fn change_sound_theme_setting(app: AppHandle, theme: String) -> Result<(), S
 }
 
 #[tauri::command]
+pub fn change_language_shortcut_sound_theme_setting(
+    app: AppHandle,
+    theme: String,
+) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.language_shortcut_sound_theme = settings::parse_sound_theme(&theme);
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn change_translate_to_english_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
     let mut settings = get_settings(&app);
     settings.translate_to_english = enabled;

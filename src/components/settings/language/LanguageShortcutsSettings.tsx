@@ -9,6 +9,7 @@ import { LanguageConfigRow } from "./LanguageConfigRow";
 import { useSettings } from "../../../hooks/useSettings";
 import { LANGUAGES } from "../../../lib/constants/languages";
 import type { LanguageConfig } from "../../../lib/types";
+import { SoundPicker } from "../SoundPicker";
 
 export const LanguageShortcutsSettings: React.FC = () => {
   const { settings, updateSetting, isUpdating } = useSettings();
@@ -106,6 +107,11 @@ export const LanguageShortcutsSettings: React.FC = () => {
             />
           </div>
         </SettingContainer>
+        <SoundPicker
+          label="Language Shortcut Sound"
+          description="Choose the sound theme played when cycling languages or activating a language-specific shortcut."
+          settingKey="language_shortcut_sound_theme"
+        />
 
         <SettingContainer
           title="Add Language"

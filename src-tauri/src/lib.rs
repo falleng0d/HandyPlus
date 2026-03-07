@@ -242,6 +242,7 @@ pub fn run() {
             command::change_audio_feedback_setting,
             command::change_audio_feedback_volume_setting,
             command::change_sound_theme_setting,
+            command::change_language_shortcut_sound_theme_setting,
             command::change_start_hidden_setting,
             command::change_autostart_setting,
             command::change_translate_to_english_setting,

@@ -1,4 +1,4 @@
-use crate::settings;
+use crate::settings::{self, SoundTheme};
 use cpal::traits::{DeviceTrait, HostTrait};
 use rodio::OutputStreamBuilder;
 use std::fs::File;
@@ -38,16 +38,15 @@ fn play_sound(app: &AppHandle, resource_path: &str, base_dir: tauri::path::BaseD
     });
 }
 
-fn get_sound_path(app: &AppHandle, sound_type: SoundType) -> String {
-    let settings = settings::get_settings(app);
+fn get_sound_path(theme: SoundTheme, sound_type: SoundType) -> String {
     match sound_type {
-        SoundType::Start => match settings.sound_theme {
-            crate::settings::SoundTheme::Custom => "custom_start.wav".to_string(),
-            _ => settings.sound_theme.to_start_path(),
+        SoundType::Start => match theme {
+            SoundTheme::Custom => "custom_start.wav".to_string(),
+            _ => theme.to_start_path(),
         },
-        SoundType::Stop => match settings.sound_theme {
-            crate::settings::SoundTheme::Custom => "custom_stop.wav".to_string(),
-            _ => settings.sound_theme.to_stop_path(),
+        SoundType::Stop => match theme {
+            SoundTheme::Custom => "custom_stop.wav".to_string(),
+            _ => theme.to_stop_path(),
         },
     }
 }
@@ -59,20 +58,25 @@ pub fn play_feedback_sound(app: &AppHandle, sound_type: SoundType) {
         return;
     }
 
-    let sound_file = get_sound_path(app, sound_type);
-    let base_dir = if settings.sound_theme == crate::settings::SoundTheme::Custom {
-        tauri::path::BaseDirectory::AppData
-    } else {
-        tauri::path::BaseDirectory::Resource
-    };
-    play_sound(app, &sound_file, base_dir);
+    let theme = settings.sound_theme;
+    play_sound_for_theme(app, theme, sound_type);
 }
 
-pub fn play_test_sound(app: &AppHandle, sound_type: SoundType) {
+pub fn play_test_sound(app: &AppHandle, sound_type: SoundType, override_theme: Option<SoundTheme>) {
     // Always play test sound, regardless of audio_feedback setting
+    let theme = override_theme.unwrap_or_else(|| settings::get_settings(app).sound_theme);
+    play_sound_for_theme(app, theme, sound_type);
+}
+
+pub fn play_language_shortcut_sound(app: &AppHandle, sound_type: SoundType) {
     let settings = settings::get_settings(app);
-    let sound_file = get_sound_path(app, sound_type);
-    let base_dir = if settings.sound_theme == crate::settings::SoundTheme::Custom {
+    let theme = settings.language_shortcut_sound_theme;
+    play_sound_for_theme(app, theme, sound_type);
+}
+
+fn play_sound_for_theme(app: &AppHandle, theme: SoundTheme, sound_type: SoundType) {
+    let sound_file = get_sound_path(theme, sound_type);
+    let base_dir = if theme == SoundTheme::Custom {
         tauri::path::BaseDirectory::AppData
     } else {
         tauri::path::BaseDirectory::Resource
