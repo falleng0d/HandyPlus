@@ -8,7 +8,7 @@
 
 Handy is a cross-platform desktop application built with Tauri (Rust + React/TypeScript) that provides simple, privacy-focused speech transcription. Press a shortcut, speak, and have your words appear in any text field—all without sending your voice to the cloud.
 
-## Why Handy?
+## Why Handy+?
 
 Handy was created to fill the gap for a truly open source, extensible speech-to-text tool. As stated on [handy.computer](https://handy.computer):
 
@@ -18,6 +18,20 @@ Handy was created to fill the gap for a truly open source, extensible speech-to-
 - **Simple**: One tool, one job. Transcribe what you say and put it into a text box
 
 Handy isn't trying to be the best speech-to-text app—it's trying to be the most forkable one.
+
+### Handy+ vs Handy
+
+Handy+ is a fork of the original Handy project with a focus on improving the experience for Windows users. It includes:
+
+- **Improved Windows Shortcuts Support**: Shortcuts now work reliably on Windows and prevent propagation to other apps. It now also supports single modifier keys (Ctrl, Alt, Shift) for more flexible shortcut configurations.
+- **Languages Tab**: A new tab in settings to configure language preferences and assign shortcuts for language switching
+- **Languages Shortcuts**: Assign custom shortcuts to quickly switch between languages including associating a post-processing prompt and model for each language
+- **Dictionary Injection**: Send the words on your dictionary to the llm so that it can fix spelling errors (`${dictionary}` variable in the prompt instructions)
+- **Always On Top Fix**: The "Always on Top" setting now works correctly on Windows, keeping the app overlay visible
+
+![img.png](.README/general_tab.png)
+
+![img.png](.README/languages_tab.png)
 
 ## How It Works
 
