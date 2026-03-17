@@ -1,4 +1,6 @@
-# Handy
+# Handy+
+
+`Handy+` is an improved version of Handy https://github.com/cjpais/Handy focused on windows users made by `Mateus Junior`
 
 [![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com/invite/WVBeWsNXK4)
 
@@ -153,9 +155,9 @@ If you're behind a proxy, firewall, or in a restricted network environment where
 
 The typical paths are:
 
-- **macOS**: `~/Library/Application Support/com.pais.handy/`
-- **Windows**: `C:\Users\{username}\AppData\Roaming\com.pais.handy\`
-- **Linux**: `~/.config/com.pais.handy/`
+- **macOS**: `~/Library/Application Support/com.matj.handyplus/`
+- **Windows**: `C:\Users\{username}\AppData\Roaming\com.matj.handyplus\`
+- **Linux**: `~/.config/com.matj.handyplus/`
 
 #### Step 2: Create Models Directory
 
@@ -163,10 +165,10 @@ Inside your app data directory, create a `models` folder if it doesn't already e
 
 ```bash
 # macOS/Linux
-mkdir -p ~/Library/Application\ Support/com.pais.handy/models
+mkdir -p ~/Library/Application\ Support/com.matj.handyplus/models
 
 # Windows (PowerShell)
-New-Item -ItemType Directory -Force -Path "$env:APPDATA\com.pais.handy\models"
+New-Item -ItemType Directory -Force -Path "$env:APPDATA\com.matj.handyplus\models"
 ```
 
 #### Step 3: Download Model Files
@@ -242,22 +244,9 @@ Final structure should look like:
 
 The goal is to create both a useful tool and a foundation for others to build upon—a well-patterned, simple codebase that serves the community.
 
-## Sponsors
-
-<div align="center">
-  We're grateful for the support of our sponsors who help make Handy possible:
-  <br><br>
-  <a href="https://wordcab.com">
-    <img src="sponsor-images/wordcab.png" alt="Wordcab" width="120" height="120">
-  </a>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://github.com/epicenter-so/epicenter">
-    <img src="sponsor-images/epicenter.png" alt="Epicenter" width="120" height="120">
-  </a>
-</div>
-
 ## Related Projects
 
+- **[Handy](https://github.com/cjpais/Handy)** - The original Tauri desktop application
 - **[Handy CLI](https://github.com/cjpais/handy-cli)** - The original Python command-line version
 - **[handy.computer](https://handy.computer)** - Project website with demos and documentation
 
