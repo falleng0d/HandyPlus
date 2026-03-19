@@ -169,9 +169,9 @@ If you're behind a proxy, firewall, or in a restricted network environment where
 
 The typical paths are:
 
-- **macOS**: `~/Library/Application Support/com.matj.handyplus/`
-- **Windows**: `C:\Users\{username}\AppData\Roaming\com.matj.handyplus\`
-- **Linux**: `~/.config/com.matj.handyplus/`
+- **macOS**: `~/Library/Application Support/HandyPlus/`
+- **Windows**: `C:\Users\{username}\AppData\Roaming\HandyPlus\`
+- **Linux**: `~/.config/HandyPlus/`
 
 #### Step 2: Create Models Directory
 
@@ -179,10 +179,10 @@ Inside your app data directory, create a `models` folder if it doesn't already e
 
 ```bash
 # macOS/Linux
-mkdir -p ~/Library/Application\ Support/com.matj.handyplus/models
+mkdir -p ~/Library/Application\ Support/HandyPlus/models
 
 # Windows (PowerShell)
-New-Item -ItemType Directory -Force -Path "$env:APPDATA\com.matj.handyplus\models"
+New-Item -ItemType Directory -Force -Path "$env:APPDATA\HandyPlus\models"
 ```
 
 #### Step 3: Download Model Files
