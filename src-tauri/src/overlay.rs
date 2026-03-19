@@ -1,7 +1,7 @@
 use crate::settings;
 use crate::settings::OverlayPosition;
 use enigo::{Enigo, Mouse};
-use log::debug;
+use log::{debug, warn};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindowBuilder};
@@ -21,6 +21,65 @@ const OVERLAY_BOTTOM_OFFSET: f64 = 15.0;
 const OVERLAY_BOTTOM_OFFSET: f64 = 40.0;
 
 static OVERLAY_VISIBILITY_TOKEN: AtomicU64 = AtomicU64::new(0);
+
+fn log_overlay_window_result(action: &str, result: tauri::Result<()>) {
+    match result {
+        Ok(()) => debug!("Recording overlay: {}", action),
+        Err(err) => warn!("Recording overlay: failed to {}: {}", action, err),
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn refresh_overlay_always_on_top(window: &tauri::WebviewWindow, reason: &str) {
+    debug!(
+        "Recording overlay: forcing always-on-top refresh on Windows ({})",
+        reason
+    );
+    log_overlay_window_result(
+        "clear always-on-top before reapplying",
+        window.set_always_on_top(false),
+    );
+    log_overlay_window_result("reapply always-on-top", window.set_always_on_top(true));
+}
+
+#[cfg(not(target_os = "windows"))]
+fn refresh_overlay_always_on_top(window: &tauri::WebviewWindow, reason: &str) {
+    debug!("Recording overlay: ensuring always-on-top ({})", reason);
+    log_overlay_window_result("ensure always-on-top", window.set_always_on_top(true));
+}
+
+#[cfg(target_os = "windows")]
+fn clear_overlay_always_on_top(window: &tauri::WebviewWindow, reason: &str) {
+    debug!(
+        "Recording overlay: clearing always-on-top on Windows ({})",
+        reason
+    );
+    log_overlay_window_result("clear always-on-top", window.set_always_on_top(false));
+}
+
+#[cfg(not(target_os = "windows"))]
+fn clear_overlay_always_on_top(_window: &tauri::WebviewWindow, _reason: &str) {}
+
+fn show_overlay_window(app_handle: &AppHandle, overlay_state: &str) {
+    let _visibility_token = bump_overlay_visibility_token();
+    update_overlay_position(app_handle);
+
+    if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
+        debug!("Recording overlay: showing '{}' state", overlay_state);
+        log_overlay_window_result("show window", overlay_window.show());
+        refresh_overlay_always_on_top(&overlay_window, overlay_state);
+
+        match overlay_window.emit("show-overlay", overlay_state) {
+            Ok(()) => debug!("Recording overlay: emitted show-overlay for '{}'", overlay_state),
+            Err(err) => warn!(
+                "Recording overlay: failed to emit show-overlay for '{}': {}",
+                overlay_state, err
+            ),
+        }
+    } else {
+        warn!("Recording overlay: window not found while showing '{}'", overlay_state);
+    }
+}
 
 fn bump_overlay_visibility_token() -> u64 {
     OVERLAY_VISIBILITY_TOKEN.fetch_add(1, Ordering::SeqCst) + 1
@@ -135,15 +194,7 @@ pub fn show_recording_overlay(app_handle: &AppHandle) {
         return;
     }
 
-    let _visibility_token = bump_overlay_visibility_token();
-    update_overlay_position(app_handle);
-
-    if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
-        let _ = overlay_window.show();
-        let _ = overlay_window.set_always_on_top(true);
-        // Emit event to trigger fade-in animation with recording state
-        let _ = overlay_window.emit("show-overlay", "recording");
-    }
+    show_overlay_window(app_handle, "recording");
 }
 
 /// Shows the transcribing overlay window
@@ -154,15 +205,7 @@ pub fn show_transcribing_overlay(app_handle: &AppHandle) {
         return;
     }
 
-    let _visibility_token = bump_overlay_visibility_token();
-    update_overlay_position(app_handle);
-
-    if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
-        let _ = overlay_window.show();
-        let _ = overlay_window.set_always_on_top(true);
-        // Emit event to switch to transcribing state
-        let _ = overlay_window.emit("show-overlay", "transcribing");
-    }
+    show_overlay_window(app_handle, "transcribing");
 }
 
 /// Updates the overlay window position based on current settings
@@ -180,17 +223,32 @@ pub fn hide_recording_overlay(app_handle: &AppHandle) {
     // Always hide the overlay regardless of settings - if setting was changed while recording,
     // we still want to hide it properly
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
-        // Emit event to trigger fade-out animation
-        let _ = overlay_window.emit("hide-overlay", ());
+        debug!("Recording overlay: requested hide with fade-out animation");
+        match overlay_window.emit("hide-overlay", ()) {
+            Ok(()) => debug!("Recording overlay: emitted hide-overlay"),
+            Err(err) => warn!("Recording overlay: failed to emit hide-overlay: {}", err),
+        }
         // Hide the window after a short delay to allow animation to complete
         let window_clone = overlay_window.clone();
         let hide_token = bump_overlay_visibility_token();
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(300));
             if OVERLAY_VISIBILITY_TOKEN.load(Ordering::SeqCst) == hide_token {
-                let _ = window_clone.hide();
+                debug!(
+                    "Recording overlay: executing hide for visibility token {}",
+                    hide_token
+                );
+                clear_overlay_always_on_top(&window_clone, "before hide");
+                log_overlay_window_result("hide window", window_clone.hide());
+            } else {
+                debug!(
+                    "Recording overlay: skipping stale hide for visibility token {}",
+                    hide_token
+                );
             }
         });
+    } else {
+        warn!("Recording overlay: window not found while hiding");
     }
 }
 
