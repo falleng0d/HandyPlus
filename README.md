@@ -23,7 +23,7 @@ Handy isn't trying to be the best speech-to-text app—it's trying to be the mos
 
 Handy+ is a fork of the original Handy project with a focus on improving the experience for Windows users. It includes:
 
-- **Improved Windows Shortcuts Support**: Shortcuts now work reliably on Windows and prevent propagation to other apps. It now also supports single modifier keys (Ctrl, Alt, Shift) for more flexible shortcut configurations.
+- **Improved Windows Shortcuts Support**: Shortcuts now work reliably on Windows and prevent propagation to other apps. It now also supports single modifier keys (RightCtrl, RightAlt, Shift) for more flexible shortcut configurations.
 - **Languages Tab**: A new tab in settings to configure language preferences and assign shortcuts for language switching
 - **Languages Shortcuts**: Assign custom shortcuts to quickly switch between languages including associating a post-processing prompt and model for each language
 - **Dictionary Injection**: Send the words on your dictionary to the llm so that it can fix spelling errors (`${dictionary}` variable in the prompt instructions)
