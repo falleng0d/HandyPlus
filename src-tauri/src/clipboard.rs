@@ -68,13 +68,22 @@ fn send_paste_shift_insert() -> Result<(), String> {
 
 /// Pastes text directly using the enigo text method.
 /// This tries to use system input methods if possible, otherwise simulates keystrokes one by one.
-fn paste_via_direct_input(text: &str) -> Result<(), String> {
+fn paste_via_direct_input(text: &str, typing_interval_ms: u64) -> Result<(), String> {
     let mut enigo = Enigo::new(&Settings::default())
         .map_err(|e| format!("Failed to initialize Enigo: {}", e))?;
 
-    enigo
-        .text(text)
-        .map_err(|e| format!("Failed to send text directly: {}", e))?;
+    if typing_interval_ms > 0 {
+        for c in text.chars() {
+            enigo
+                .text(&c.to_string())
+                .map_err(|e| format!("Failed to send character: {}", e))?;
+            std::thread::sleep(std::time::Duration::from_millis(typing_interval_ms));
+        }
+    } else {
+        enigo
+            .text(text)
+            .map_err(|e| format!("Failed to send text directly: {}", e))?;
+    }
 
     Ok(())
 }
@@ -137,13 +146,14 @@ fn paste_via_clipboard_shift_insert(text: &str, app_handle: &AppHandle) -> Resul
 pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
     let settings = get_settings(&app_handle);
     let paste_method = settings.paste_method;
+    let typing_interval_ms = settings.typing_interval_ms;
 
     println!("Using paste method: {:?}", paste_method);
 
     // Perform the paste operation
     match paste_method {
         PasteMethod::CtrlV => paste_via_clipboard_ctrl_v(&text, &app_handle)?,
-        PasteMethod::Direct => paste_via_direct_input(&text)?,
+        PasteMethod::Direct => paste_via_direct_input(&text, typing_interval_ms)?,
         #[cfg(not(target_os = "macos"))]
         PasteMethod::ShiftInsert => paste_via_clipboard_shift_insert(&text, &app_handle)?,
     }

@@ -200,6 +200,8 @@ pub struct AppSettings {
     pub paste_method: PasteMethod,
     #[serde(default)]
     pub clipboard_handling: ClipboardHandling,
+    #[serde(default = "default_typing_interval_ms")]
+    pub typing_interval_ms: u64,
     #[serde(default = "default_post_process_enabled")]
     pub post_process_enabled: bool,
     #[serde(default = "default_post_process_provider_id")]
@@ -273,6 +275,10 @@ fn default_word_correction_threshold() -> f64 {
 
 fn default_history_limit() -> usize {
     5
+}
+
+fn default_typing_interval_ms() -> u64 {
+    10
 }
 
 fn default_audio_feedback_volume() -> f32 {
@@ -423,6 +429,7 @@ pub fn get_default_settings() -> AppSettings {
         history_limit: default_history_limit(),
         paste_method: PasteMethod::default(),
         clipboard_handling: ClipboardHandling::default(),
+        typing_interval_ms: default_typing_interval_ms(),
         post_process_enabled: default_post_process_enabled(),
         post_process_provider_id: default_post_process_provider_id(),
         post_process_providers: default_post_process_providers(),

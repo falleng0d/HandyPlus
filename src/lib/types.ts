@@ -104,6 +104,7 @@ export const SettingsSchema = z.object({
   history_limit: z.number().optional().default(5),
   paste_method: PasteMethodSchema.optional().default("ctrl_v"),
   clipboard_handling: ClipboardHandlingSchema.optional().default("dont_modify"),
+  typing_interval_ms: z.number().optional().default(0),
   post_process_enabled: z.boolean().optional().default(false),
   post_process_provider_id: z.string().optional().default("openai"),
   post_process_providers: z
