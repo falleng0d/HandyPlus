@@ -70,14 +70,20 @@ fn show_overlay_window(app_handle: &AppHandle, overlay_state: &str) {
         refresh_overlay_always_on_top(&overlay_window, overlay_state);
 
         match overlay_window.emit("show-overlay", overlay_state) {
-            Ok(()) => debug!("Recording overlay: emitted show-overlay for '{}'", overlay_state),
+            Ok(()) => debug!(
+                "Recording overlay: emitted show-overlay for '{}'",
+                overlay_state
+            ),
             Err(err) => warn!(
                 "Recording overlay: failed to emit show-overlay for '{}': {}",
                 overlay_state, err
             ),
         }
     } else {
-        warn!("Recording overlay: window not found while showing '{}'", overlay_state);
+        warn!(
+            "Recording overlay: window not found while showing '{}'",
+            overlay_state
+        );
     }
 }
 

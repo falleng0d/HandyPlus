@@ -1,5 +1,7 @@
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
@@ -156,6 +158,35 @@ pub fn parse_sound_theme(value: &str) -> SoundTheme {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SecretMap(HashMap<String, String>);
+
+impl fmt::Debug for SecretMap {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let redacted: HashMap<&String, &str> = self
+            .0
+            .iter()
+            .map(|(key, value)| (key, if value.is_empty() { "" } else { "[REDACTED]" }))
+            .collect();
+        redacted.fmt(f)
+    }
+}
+
+impl std::ops::Deref for SecretMap {
+    type Target = HashMap<String, String>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for SecretMap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 /* still handy for composing the initial JSON in the store ------------- */
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppSettings {
@@ -209,7 +240,7 @@ pub struct AppSettings {
     #[serde(default = "default_post_process_providers")]
     pub post_process_providers: Vec<PostProcessProvider>,
     #[serde(default = "default_post_process_api_keys")]
-    pub post_process_api_keys: HashMap<String, String>,
+    pub post_process_api_keys: SecretMap,
     #[serde(default = "default_post_process_models")]
     pub post_process_models: HashMap<String, String>,
     #[serde(default = "default_post_process_prompts")]
@@ -334,12 +365,12 @@ fn default_post_process_providers() -> Vec<PostProcessProvider> {
     ]
 }
 
-fn default_post_process_api_keys() -> HashMap<String, String> {
+fn default_post_process_api_keys() -> SecretMap {
     let mut map = HashMap::new();
     for provider in default_post_process_providers() {
         map.insert(provider.id, String::new());
     }
-    map
+    SecretMap(map)
 }
 
 fn default_post_process_models() -> HashMap<String, String> {
@@ -481,11 +512,11 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
         // Parse the entire settings object
         match serde_json::from_value::<AppSettings>(settings_value) {
             Ok(settings) => {
-                println!("Found existing settings: {:?}", settings);
+                debug!("Found existing settings: {:?}", settings);
                 settings
             }
             Err(e) => {
-                println!("Failed to parse settings: {}", e);
+                warn!("Failed to parse settings: {}", e);
                 // Fall back to default settings if parsing fails
                 let default_settings = get_default_settings();
                 store.set("settings", serde_json::to_value(&default_settings).unwrap());

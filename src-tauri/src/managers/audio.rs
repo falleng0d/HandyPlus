@@ -339,6 +339,10 @@ impl AudioRecordingManager {
         Ok(())
     }
 
+    pub fn is_recording(&self) -> bool {
+        *self.is_recording.lock().unwrap()
+    }
+
     pub fn stop_recording(&self, binding_id: &str) -> Option<Vec<f32>> {
         let mut state = self.state.lock().unwrap();
 

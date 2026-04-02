@@ -1,14 +1,16 @@
 use crate::audio_toolkit::{apply_custom_words, filter_transcription_output};
+use crate::managers::audio::AudioRecordingManager;
 use crate::managers::model::{EngineType, ModelManager};
 use crate::settings::{get_settings, ModelUnloadTimeout};
 use anyhow::Result;
 use log::{debug, error, info, warn};
 use serde::Serialize;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, SystemTime};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use transcribe_rs::{
     engines::{
         moonshine::{ModelVariant, MoonshineEngine, MoonshineModelParams},
@@ -32,6 +34,19 @@ enum LoadedEngine {
     Whisper(WhisperEngine),
     Parakeet(ParakeetEngine),
     Moonshine(MoonshineEngine),
+}
+
+struct LoadingGuard {
+    is_loading: Arc<Mutex<bool>>,
+    loading_condvar: Arc<Condvar>,
+}
+
+impl Drop for LoadingGuard {
+    fn drop(&mut self) {
+        let mut is_loading = self.is_loading.lock().unwrap();
+        *is_loading = false;
+        self.loading_condvar.notify_all();
+    }
 }
 
 #[derive(Clone)]
@@ -72,6 +87,7 @@ impl TranscriptionManager {
             let manager_cloned = manager.clone();
             let shutdown_signal = manager.shutdown_signal.clone();
             let handle = thread::spawn(move || {
+                debug!("Idle watcher thread started");
                 while !shutdown_signal.load(Ordering::Relaxed) {
                     thread::sleep(Duration::from_secs(10)); // Check every 10 seconds
 
@@ -81,41 +97,42 @@ impl TranscriptionManager {
                     }
 
                     let settings = get_settings(&app_handle_cloned);
-                    let timeout_seconds = settings.model_unload_timeout.to_seconds();
+                    let timeout = settings.model_unload_timeout;
 
-                    if let Some(limit_seconds) = timeout_seconds {
-                        // Skip polling-based unloading for immediate timeout since it's handled directly in transcribe()
-                        if settings.model_unload_timeout == ModelUnloadTimeout::Immediately {
-                            continue;
-                        }
+                    if timeout == ModelUnloadTimeout::Immediately {
+                        continue;
+                    }
 
+                    let is_recording = app_handle_cloned
+                        .try_state::<Arc<AudioRecordingManager>>()
+                        .map_or(false, |audio_manager| audio_manager.is_recording());
+                    if is_recording {
+                        manager_cloned.touch_activity();
+                        continue;
+                    }
+
+                    if let Some(limit_seconds) = timeout.to_seconds() {
                         let last = manager_cloned.last_activity.load(Ordering::Relaxed);
-                        let now_ms = SystemTime::now()
-                            .duration_since(SystemTime::UNIX_EPOCH)
-                            .unwrap()
-                            .as_millis() as u64;
+                        let now_ms = Self::now_ms();
 
                         if now_ms.saturating_sub(last) > limit_seconds * 1000 {
-                            // idle -> unload
                             if manager_cloned.is_model_loaded() {
                                 let unload_start = std::time::Instant::now();
-                                debug!("Starting to unload model due to inactivity");
+                                info!(
+                                    "Model idle for {}s (limit: {}s), unloading",
+                                    now_ms.saturating_sub(last) / 1000,
+                                    limit_seconds
+                                );
 
-                                if let Ok(()) = manager_cloned.unload_model() {
-                                    let _ = app_handle_cloned.emit(
-                                        "model-state-changed",
-                                        ModelStateEvent {
-                                            event_type: "unloaded".to_string(),
-                                            model_id: None,
-                                            model_name: None,
-                                            error: None,
-                                        },
-                                    );
-                                    let unload_duration = unload_start.elapsed();
-                                    debug!(
-                                        "Model unloaded due to inactivity (took {}ms)",
-                                        unload_duration.as_millis()
-                                    );
+                                match manager_cloned.unload_model() {
+                                    Ok(()) => {
+                                        let unload_duration = unload_start.elapsed();
+                                        info!(
+                                            "Model unloaded due to inactivity (took {}ms)",
+                                            unload_duration.as_millis()
+                                        );
+                                    }
+                                    Err(e) => error!("Failed to unload idle model: {}", e),
                                 }
                             }
                         }
@@ -129,9 +146,43 @@ impl TranscriptionManager {
         Ok(manager)
     }
 
+    fn lock_engine(&self) -> MutexGuard<'_, Option<LoadedEngine>> {
+        self.engine.lock().unwrap_or_else(|poisoned| {
+            warn!("Engine mutex was poisoned by a previous panic, recovering");
+            poisoned.into_inner()
+        })
+    }
+
+    fn now_ms() -> u64 {
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
+    }
+
+    fn touch_activity(&self) {
+        self.last_activity.store(Self::now_ms(), Ordering::Relaxed);
+    }
+
+    fn try_start_loading(&self) -> Option<LoadingGuard> {
+        let mut is_loading = self.is_loading.lock().unwrap();
+        if *is_loading {
+            return None;
+        }
+        *is_loading = true;
+        Some(LoadingGuard {
+            is_loading: self.is_loading.clone(),
+            loading_condvar: self.loading_condvar.clone(),
+        })
+    }
+
     pub fn is_model_loaded(&self) -> bool {
-        let engine = self.engine.lock().unwrap();
+        let engine = self.lock_engine();
         engine.is_some()
+    }
+
+    pub fn is_loading(&self) -> bool {
+        *self.is_loading.lock().unwrap()
     }
 
     pub fn unload_model(&self) -> Result<()> {
@@ -139,7 +190,7 @@ impl TranscriptionManager {
         debug!("Starting to unload model");
 
         {
-            let mut engine = self.engine.lock().unwrap();
+            let mut engine = self.lock_engine();
             if let Some(ref mut loaded_engine) = *engine {
                 match loaded_engine {
                     LoadedEngine::Whisper(ref mut e) => e.unload_model(),
@@ -296,6 +347,8 @@ impl TranscriptionManager {
             *current_model = Some(model_id.to_string());
         }
 
+        self.touch_activity();
+
         // Emit loading completed event
         let _ = self.app_handle.emit(
             "model-state-changed",
@@ -318,21 +371,21 @@ impl TranscriptionManager {
 
     /// Kicks off the model loading in a background thread if it's not already loaded
     pub fn initiate_model_load(&self) {
-        let mut is_loading = self.is_loading.lock().unwrap();
-        if *is_loading || self.is_model_loaded() {
+        if self.is_model_loaded() {
             return;
         }
 
-        *is_loading = true;
+        let Some(_guard) = self.try_start_loading() else {
+            return;
+        };
+
         let self_clone = self.clone();
         thread::spawn(move || {
+            let _guard = _guard;
             let settings = get_settings(&self_clone.app_handle);
             if let Err(e) = self_clone.load_model(&settings.selected_model) {
                 error!("Failed to load model: {}", e);
             }
-            let mut is_loading = self_clone.is_loading.lock().unwrap();
-            *is_loading = false;
-            self_clone.loading_condvar.notify_all();
         });
     }
 
@@ -343,13 +396,7 @@ impl TranscriptionManager {
 
     pub fn transcribe(&self, audio: Vec<f32>) -> Result<String> {
         // Update last activity timestamp
-        self.last_activity.store(
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
-            Ordering::Relaxed,
-        );
+        self.touch_activity();
 
         let st = std::time::Instant::now();
 
@@ -369,7 +416,7 @@ impl TranscriptionManager {
                 is_loading = self.loading_condvar.wait(is_loading).unwrap();
             }
 
-            let engine_guard = self.engine.lock().unwrap();
+            let engine_guard = self.lock_engine();
             if engine_guard.is_none() {
                 return Err(anyhow::anyhow!("Model is not loaded for transcription."));
             }
@@ -378,54 +425,100 @@ impl TranscriptionManager {
         // Get current settings for configuration
         let settings = get_settings(&self.app_handle);
 
-        // Perform transcription with the appropriate engine
+        // Run engine inference without holding the mutex so a panic cannot poison it.
         let result = {
-            let mut engine_guard = self.engine.lock().unwrap();
-            let engine = engine_guard.as_mut().ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Model failed to load after auto-load attempt. Please check your model settings."
-                )
-            })?;
+            let mut engine_guard = self.lock_engine();
+            let mut engine = match engine_guard.take() {
+                Some(engine) => engine,
+                None => {
+                    return Err(anyhow::anyhow!(
+                        "Model failed to load after auto-load attempt. Please check your model settings."
+                    ));
+                }
+            };
+            drop(engine_guard);
 
-            match engine {
-                LoadedEngine::Whisper(whisper_engine) => {
-                    // Normalize language code for Whisper
-                    // Convert zh-Hans and zh-Hant to zh since Whisper uses ISO 639-1 codes
-                    let whisper_language = if settings.selected_language == "auto" {
-                        None
-                    } else {
-                        let normalized = if settings.selected_language == "zh-Hans"
-                            || settings.selected_language == "zh-Hant"
-                        {
-                            "zh".to_string()
+            let transcribe_result = catch_unwind(AssertUnwindSafe(|| -> Result<_> {
+                match &mut engine {
+                    LoadedEngine::Whisper(whisper_engine) => {
+                        let whisper_language = if settings.selected_language == "auto" {
+                            None
                         } else {
-                            settings.selected_language.clone()
+                            let normalized = if settings.selected_language == "zh-Hans"
+                                || settings.selected_language == "zh-Hant"
+                            {
+                                "zh".to_string()
+                            } else {
+                                settings.selected_language.clone()
+                            };
+                            Some(normalized)
                         };
-                        Some(normalized)
+
+                        let params = WhisperInferenceParams {
+                            language: whisper_language,
+                            translate: settings.translate_to_english,
+                            ..Default::default()
+                        };
+
+                        whisper_engine
+                            .transcribe_samples(audio, Some(params))
+                            .map_err(|e| anyhow::anyhow!("Whisper transcription failed: {}", e))
+                    }
+                    LoadedEngine::Parakeet(parakeet_engine) => {
+                        let params = ParakeetInferenceParams {
+                            timestamp_granularity: TimestampGranularity::Segment,
+                            ..Default::default()
+                        };
+                        parakeet_engine
+                            .transcribe_samples(audio, Some(params))
+                            .map_err(|e| anyhow::anyhow!("Parakeet transcription failed: {}", e))
+                    }
+                    LoadedEngine::Moonshine(moonshine_engine) => moonshine_engine
+                        .transcribe_samples(audio, None)
+                        .map_err(|e| anyhow::anyhow!("Moonshine transcription failed: {}", e)),
+                }
+            }));
+
+            match transcribe_result {
+                Ok(inner_result) => {
+                    let mut engine_guard = self.lock_engine();
+                    *engine_guard = Some(engine);
+                    inner_result?
+                }
+                Err(panic_payload) => {
+                    let panic_msg = if let Some(message) = panic_payload.downcast_ref::<&str>() {
+                        (*message).to_string()
+                    } else if let Some(message) = panic_payload.downcast_ref::<String>() {
+                        message.clone()
+                    } else {
+                        "unknown panic".to_string()
                     };
 
-                    let params = WhisperInferenceParams {
-                        language: whisper_language,
-                        translate: settings.translate_to_english,
-                        ..Default::default()
-                    };
+                    error!(
+                        "Transcription engine panicked: {}. Model has been unloaded.",
+                        panic_msg
+                    );
 
-                    whisper_engine
-                        .transcribe_samples(audio, Some(params))
-                        .map_err(|e| anyhow::anyhow!("Whisper transcription failed: {}", e))?
+                    {
+                        let mut current_model = self.current_model_id.lock().unwrap();
+                        *current_model = None;
+                    }
+
+                    let _ = self.app_handle.emit(
+                        "model-state-changed",
+                        ModelStateEvent {
+                            event_type: "unloaded".to_string(),
+                            model_id: None,
+                            model_name: None,
+                            error: Some(format!("Engine panicked: {}", panic_msg)),
+                        },
+                    );
+
+                    return Err(anyhow::anyhow!(
+                        "Transcription engine panicked: {}. The model has been unloaded and will reload on next attempt.",
+                        panic_msg
+                    ));
                 }
-                LoadedEngine::Parakeet(parakeet_engine) => {
-                    let params = ParakeetInferenceParams {
-                        timestamp_granularity: TimestampGranularity::Segment,
-                        ..Default::default()
-                    };
-                    parakeet_engine
-                        .transcribe_samples(audio, Some(params))
-                        .map_err(|e| anyhow::anyhow!("Parakeet transcription failed: {}", e))?
-                }
-                LoadedEngine::Moonshine(moonshine_engine) => moonshine_engine
-                    .transcribe_samples(audio, None)
-                    .map_err(|e| anyhow::anyhow!("Moonshine transcription failed: {}", e))?,
             }
         };
 
@@ -471,6 +564,10 @@ impl TranscriptionManager {
 
 impl Drop for TranscriptionManager {
     fn drop(&mut self) {
+        if Arc::strong_count(&self.engine) > 1 {
+            return;
+        }
+
         debug!("Shutting down TranscriptionManager");
 
         // Signal the watcher thread to shutdown
