@@ -24,6 +24,7 @@ export type ModelStatus =
 interface ModelStateEvent {
   event_type: string;
   model_id?: string;
+  model_name?: string;
   error?: string;
 }
 
@@ -515,7 +516,14 @@ export const ModelsProvider: React.FC<{ children: React.ReactNode }> = ({
       extractionCompletedUnlisten.then((fn) => fn());
       extractionFailedUnlisten.then((fn) => fn());
     };
-  }, [checkFirstRun, loadCurrentModel, loadModels, selectModel, setSettings, updateModelAndSettings]);
+  }, [
+    checkFirstRun,
+    loadCurrentModel,
+    loadModels,
+    selectModel,
+    setSettings,
+    updateModelAndSettings,
+  ]);
 
   const value = useMemo<ModelsContextValue>(
     () => ({

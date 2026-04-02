@@ -67,6 +67,7 @@ export const PostProcessProviderSchema = z.object({
   base_url: z.string(),
   allow_base_url_edit: z.boolean().optional().default(false),
   models_endpoint: z.string().nullable().optional(),
+  supports_structured_output: z.boolean().optional().default(false),
   kind: z
     .enum(["openai_compatible", "anthropic"])
     .optional()
@@ -143,11 +144,13 @@ export const ModelInfoSchema = z.object({
   description: z.string(),
   filename: z.string(),
   url: z.string().optional(),
+  sha256: z.string().nullable().optional(),
   size_mb: z.number(),
   is_downloaded: z.boolean(),
   is_downloading: z.boolean(),
   partial_size: z.number(),
   is_directory: z.boolean(),
+  engine_type: z.enum(["Whisper", "Parakeet", "Moonshine"]),
   accuracy_score: z.number(),
   speed_score: z.number(),
 });

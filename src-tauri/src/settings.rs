@@ -39,6 +39,8 @@ pub struct PostProcessProvider {
     pub allow_base_url_edit: bool,
     #[serde(default)]
     pub models_endpoint: Option<String>,
+    #[serde(default)]
+    pub supports_structured_output: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -340,6 +342,7 @@ fn default_post_process_providers() -> Vec<PostProcessProvider> {
             base_url: "https://api.openai.com/v1".to_string(),
             allow_base_url_edit: false,
             models_endpoint: Some("/models".to_string()),
+            supports_structured_output: true,
         },
         PostProcessProvider {
             id: "openrouter".to_string(),
@@ -347,6 +350,7 @@ fn default_post_process_providers() -> Vec<PostProcessProvider> {
             base_url: "https://openrouter.ai/api/v1".to_string(),
             allow_base_url_edit: false,
             models_endpoint: Some("/models".to_string()),
+            supports_structured_output: true,
         },
         PostProcessProvider {
             id: "anthropic".to_string(),
@@ -354,6 +358,7 @@ fn default_post_process_providers() -> Vec<PostProcessProvider> {
             base_url: "https://api.anthropic.com/v1".to_string(),
             allow_base_url_edit: false,
             models_endpoint: Some("/models".to_string()),
+            supports_structured_output: false,
         },
         PostProcessProvider {
             id: "custom".to_string(),
@@ -361,8 +366,71 @@ fn default_post_process_providers() -> Vec<PostProcessProvider> {
             base_url: "http://localhost:11434/v1".to_string(),
             allow_base_url_edit: true,
             models_endpoint: Some("/models".to_string()),
+            supports_structured_output: false,
         },
     ]
+}
+
+fn ensure_post_process_defaults(settings: &mut AppSettings) -> bool {
+    let mut changed = false;
+
+    for provider in default_post_process_providers() {
+        match settings
+            .post_process_providers
+            .iter_mut()
+            .find(|existing| existing.id == provider.id)
+        {
+            Some(existing) => {
+                if existing.supports_structured_output != provider.supports_structured_output {
+                    existing.supports_structured_output = provider.supports_structured_output;
+                    changed = true;
+                }
+
+                if existing.models_endpoint.is_none() && provider.models_endpoint.is_some() {
+                    existing.models_endpoint = provider.models_endpoint.clone();
+                    changed = true;
+                }
+            }
+            None => {
+                settings.post_process_providers.push(provider.clone());
+                changed = true;
+            }
+        }
+
+        if !settings.post_process_api_keys.contains_key(&provider.id) {
+            settings
+                .post_process_api_keys
+                .insert(provider.id.clone(), String::new());
+            changed = true;
+        }
+
+        if !settings.post_process_models.contains_key(&provider.id) {
+            settings
+                .post_process_models
+                .insert(provider.id.clone(), String::new());
+            changed = true;
+        }
+    }
+
+    if settings
+        .post_process_provider(&settings.post_process_provider_id)
+        .is_none()
+    {
+        settings.post_process_provider_id = default_post_process_provider_id();
+        changed = true;
+    }
+
+    if settings.post_process_selected_prompt_id.is_none()
+        && !settings.post_process_prompts.is_empty()
+    {
+        settings.post_process_selected_prompt_id = settings
+            .post_process_prompts
+            .first()
+            .map(|prompt| prompt.id.clone());
+        changed = true;
+    }
+
+    changed
 }
 
 fn default_post_process_api_keys() -> SecretMap {
@@ -508,7 +576,7 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
         .store(SETTINGS_STORE_PATH)
         .expect("Failed to initialize store");
 
-    let settings = if let Some(settings_value) = store.get("settings") {
+    let mut settings = if let Some(settings_value) = store.get("settings") {
         // Parse the entire settings object
         match serde_json::from_value::<AppSettings>(settings_value) {
             Ok(settings) => {
@@ -529,6 +597,10 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
         default_settings
     };
 
+    if ensure_post_process_defaults(&mut settings) {
+        store.set("settings", serde_json::to_value(&settings).unwrap());
+    }
+
     settings
 }
 
@@ -537,7 +609,7 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
         .store(SETTINGS_STORE_PATH)
         .expect("Failed to initialize store");
 
-    if let Some(settings_value) = store.get("settings") {
+    let mut settings = if let Some(settings_value) = store.get("settings") {
         serde_json::from_value::<AppSettings>(settings_value).unwrap_or_else(|_| {
             let default_settings = get_default_settings();
             store.set("settings", serde_json::to_value(&default_settings).unwrap());
@@ -547,7 +619,13 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
         let default_settings = get_default_settings();
         store.set("settings", serde_json::to_value(&default_settings).unwrap());
         default_settings
+    };
+
+    if ensure_post_process_defaults(&mut settings) {
+        store.set("settings", serde_json::to_value(&settings).unwrap());
     }
+
+    settings
 }
 
 pub fn write_settings(app: &AppHandle, settings: AppSettings) {
