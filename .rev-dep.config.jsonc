@@ -9,17 +9,15 @@
         {
           "name": "src",
           "pattern": "src/**/*",
-          "allow": [
-            "src/**/*"
-          ]
-        }
+          "allow": ["src/**/*"],
+        },
       ],
       "circularImportsDetection": {
         "enabled": true,
-        "ignoreTypeImports": false
+        "ignoreTypeImports": false,
       },
       "orphanFilesDetection": {
-        "enabled": false
+        "enabled": false,
       },
       "unusedNodeModulesDetection": {
         "enabled": true,
@@ -29,18 +27,18 @@
           "@tauri-apps/plugin-fs",
           "@tauri-apps/plugin-global-shortcut",
           "@tauri-apps/plugin-sql",
-          "tailwindcss"
-        ]
+          "tailwindcss",
+        ],
       },
       "missingNodeModulesDetection": {
-        "enabled": false
+        "enabled": false,
       },
       "unusedExportsDetection": {
-        "enabled": false
+        "enabled": false,
       },
       "unresolvedImportsDetection": {
-        "enabled": true
-      }
-    }
-  ]
+        "enabled": true,
+      },
+    },
+  ],
 }
