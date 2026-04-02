@@ -1,6 +1,6 @@
 [package]
 name = "handy"
-version = "0.7.1-plus"
+version = "0.8.0-plus"
 description = "HandyPlus"
 authors = ["cjpais", "mateus.junior <mateus@matj.dev>"]
 edition = "2021"
