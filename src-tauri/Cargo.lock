@@ -430,25 +430,22 @@ checksum = "55248b47b0caf0546f7988906588779981c43bb1bc9d0c44087278f80cdb44ba"
 
 [[package]]
 name = "bindgen"
-version = "0.69.5"
+version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "271383c67ccabffb7381723dea0672a673f292304fcb45c01cc648c7a8d58088"
+checksum = "993776b509cfb49c750f11b8f07a46fa23e0a1386ffc01fb1e7d343efc387895"
 dependencies = [
  "bitflags 2.10.0",
  "cexpr",
  "clang-sys",
  "itertools",
- "lazy_static",
- "lazycell",
  "log",
  "prettyplease",
  "proc-macro2",
  "quote",
  "regex",
- "rustc-hash 1.1.0",
+ "rustc-hash",
  "shlex",
  "syn 2.0.108",
- "which",
 ]
 
 [[package]]
@@ -684,7 +681,7 @@ version = "0.15.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d067ad48b8650848b989a59a86c6c36a995d02d2bf778d45c3c5d57bc2718f02"
 dependencies = [
- "smallvec 1.15.1",
+ "smallvec",
  "target-lexicon",
 ]
 
@@ -1091,7 +1088,7 @@ dependencies = [
  "phf 0.10.1",
  "proc-macro2",
  "quote",
- "smallvec 1.15.1",
+ "smallvec",
  "syn 1.0.109",
 ]
 
@@ -2154,7 +2151,7 @@ dependencies = [
  "libc",
  "once_cell",
  "pin-project-lite",
- "smallvec 1.15.1",
+ "smallvec",
  "thiserror 1.0.69",
 ]
 
@@ -2190,7 +2187,7 @@ dependencies = [
  "libc",
  "memchr",
  "once_cell",
- "smallvec 1.15.1",
+ "smallvec",
  "thiserror 1.0.69",
 ]
 
@@ -2458,6 +2455,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hmac-sha256"
+version = "1.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec9d92d097f4749b64e8cc33d924d9f40a2d4eb91402b458014b781f5733d60f"
+
+[[package]]
 name = "home"
 version = "0.5.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2562,7 +2565,7 @@ dependencies = [
  "itoa",
  "pin-project-lite",
  "pin-utils",
- "smallvec 1.15.1",
+ "smallvec",
  "tokio",
  "want",
 ]
@@ -2697,7 +2700,7 @@ dependencies = [
  "icu_normalizer_data",
  "icu_properties",
  "icu_provider",
- "smallvec 1.15.1",
+ "smallvec",
  "zerovec",
 ]
 
@@ -2759,7 +2762,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b0875f23caa03898994f6ddc501886a45c7d3d62d04d2d90788d47be1b1e4de"
 dependencies = [
  "idna_adapter",
- "smallvec 1.15.1",
+ "smallvec",
  "utf8_iter",
 ]
 
@@ -3057,12 +3060,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lazycell"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
-
-[[package]]
 name = "libappindicator"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3205,6 +3202,12 @@ name = "lru-slab"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
+
+[[package]]
+name = "lzma-rust2"
+version = "0.15.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1670343e58806300d87950e3401e820b519b9384281bbabfb15e3636689ffd69"
 
 [[package]]
 name = "mac"
@@ -3435,9 +3438,9 @@ dependencies = [
 
 [[package]]
 name = "ndarray"
-version = "0.16.1"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "882ed72dce9365842bf196bdeedf5055305f11fc8c03dee7bb0194a6cad34841"
+checksum = "520080814a7a6b4a6e9070823bb24b4531daac8c4627e08ba5de8c5ef2f2752d"
 dependencies = [
  "matrixmultiply",
  "num-complex",
@@ -3553,7 +3556,7 @@ dependencies = [
  "num-iter",
  "num-traits",
  "rand 0.8.5",
- "smallvec 1.15.1",
+ "smallvec",
  "zeroize",
 ]
 
@@ -3959,26 +3962,25 @@ dependencies = [
 
 [[package]]
 name = "ort"
-version = "2.0.0-rc.10"
+version = "2.0.0-rc.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fa7e49bd669d32d7bc2a15ec540a527e7764aec722a45467814005725bcd721"
+checksum = "d7de3af33d24a745ffb8fab904b13478438d1cd52868e6f17735ef6e1f8bf133"
 dependencies = [
  "ndarray",
  "ort-sys",
- "smallvec 2.0.0-alpha.10",
+ "smallvec",
  "tracing",
+ "ureq",
 ]
 
 [[package]]
 name = "ort-sys"
-version = "2.0.0-rc.10"
+version = "2.0.0-rc.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2aba9f5c7c479925205799216e7e5d07cc1d4fa76ea8058c60a9a30f6a4e890"
+checksum = "d7b497d21a8b6fbb4b5a544f8fadb77e801a09ae0add9e411d31c6f89e3c1e90"
 dependencies = [
- "flate2",
- "pkg-config",
- "sha2 0.10.9",
- "tar",
+ "hmac-sha256",
+ "lzma-rust2",
  "ureq",
 ]
 
@@ -4068,7 +4070,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "redox_syscall",
- "smallvec 1.15.1",
+ "smallvec",
  "windows-link 0.2.1",
 ]
 
@@ -4516,7 +4518,7 @@ dependencies = [
  "pin-project-lite",
  "quinn-proto",
  "quinn-udp",
- "rustc-hash 2.1.1",
+ "rustc-hash",
  "rustls",
  "socket2",
  "thiserror 2.0.17",
@@ -4536,7 +4538,7 @@ dependencies = [
  "lru-slab",
  "rand 0.9.2",
  "ring",
- "rustc-hash 2.1.1",
+ "rustc-hash",
  "rustls",
  "rustls-pki-types",
  "slab",
@@ -5007,7 +5009,7 @@ dependencies = [
  "fallible-streaming-iterator",
  "hashlink 0.9.1",
  "libsqlite3-sys",
- "smallvec 1.15.1",
+ "smallvec",
 ]
 
 [[package]]
@@ -5019,12 +5021,6 @@ dependencies = [
  "serde",
  "serde_derive",
 ]
-
-[[package]]
-name = "rustc-hash"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustc-hash"
@@ -5312,7 +5308,7 @@ dependencies = [
  "phf_codegen 0.8.0",
  "precomputed-hash",
  "servo_arc",
- "smallvec 1.15.1",
+ "smallvec",
 ]
 
 [[package]]
@@ -5587,12 +5583,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "smallvec"
-version = "2.0.0-alpha.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51d44cfb396c3caf6fbfd0ab422af02631b69ddd96d2eff0b0f0724f9024051b"
-
-[[package]]
 name = "socket2"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5719,7 +5709,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "smallvec 1.15.1",
+ "smallvec",
  "thiserror 2.0.17",
  "time",
  "tokio",
@@ -5800,7 +5790,7 @@ dependencies = [
  "serde",
  "sha1",
  "sha2 0.10.9",
- "smallvec 1.15.1",
+ "smallvec",
  "sqlx-core",
  "stringprep",
  "thiserror 2.0.17",
@@ -5838,7 +5828,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "smallvec 1.15.1",
+ "smallvec",
  "sqlx-core",
  "stringprep",
  "thiserror 2.0.17",
@@ -7101,10 +7091,11 @@ dependencies = [
 
 [[package]]
 name = "transcribe-rs"
-version = "0.2.2"
+version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a15e55d3bd4f74a474b7ff2c87ab416130223db490102c5ad32c6e2227686b0"
+checksum = "56613b3511bf6e62207ec63a96897d018a9f3d12cff73a628ec4c9e75934bf76"
 dependencies = [
+ "base64 0.22.1",
  "derive_builder",
  "env_logger 0.10.2",
  "hound",
@@ -7113,6 +7104,7 @@ dependencies = [
  "once_cell",
  "ort",
  "regex",
+ "rustfft",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
@@ -7365,8 +7357,8 @@ dependencies = [
 
 [[package]]
 name = "vad-rs"
-version = "0.1.5"
-source = "git+https://github.com/cjpais/vad-rs#88b3a01f72f83a5d80d0e7ea9bacfc0d897fd03f"
+version = "0.1.6"
+source = "git+https://github.com/cjpais/vad-rs#2a412ed858695b9251f3f5a1a20d95b59fa7c498"
 dependencies = [
  "eyre",
  "ndarray",
@@ -7548,7 +7540,7 @@ dependencies = [
  "cc",
  "downcast-rs",
  "rustix 1.1.2",
- "smallvec 1.15.1",
+ "smallvec",
  "wayland-sys",
 ]
 
@@ -7725,36 +7717,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a751b3277700db47d3e574514de2eced5e54dc8a5436a3bf7a0b248b2cee16f3"
 
 [[package]]
-name = "which"
-version = "4.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87ba24419a2078cd2b0f2ede2691b6c66d8e47836da3b6db8265ebad47afbfc7"
-dependencies = [
- "either",
- "home",
- "once_cell",
- "rustix 0.38.44",
-]
-
-[[package]]
 name = "whisper-rs"
-version = "0.13.2"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40b6fc553156b521663bfa8e713e7ad58c7ca262d46de9998cd7f2e4de5ba0d9"
+checksum = "2088172d00f936c348d6a72f488dc2660ab3f507263a195df308a3c2383229f6"
 dependencies = [
  "whisper-rs-sys",
 ]
 
 [[package]]
 name = "whisper-rs-sys"
-version = "0.11.1"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76bab42b2c319e3a1e0280137c59368072348d3277873c7588b6466a127dca58"
+checksum = "6986c0fe081241d391f09b9a071fbcbb59720c3563628c3c829057cf69f2a56f"
 dependencies = [
  "bindgen",
  "cfg-if",
  "cmake",
  "fs_extra",
+ "semver",
 ]
 
 [[package]]

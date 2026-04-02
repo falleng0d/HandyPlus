@@ -12,14 +12,13 @@ use std::thread;
 use std::time::{Duration, SystemTime};
 use tauri::{AppHandle, Emitter, Manager};
 use transcribe_rs::{
-    engines::{
-        moonshine::{ModelVariant, MoonshineEngine, MoonshineModelParams},
-        parakeet::{
-            ParakeetEngine, ParakeetInferenceParams, ParakeetModelParams, TimestampGranularity,
-        },
-        whisper::{WhisperEngine, WhisperInferenceParams},
+    onnx::{
+        moonshine::{MoonshineModel, MoonshineVariant},
+        parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity},
+        Quantization,
     },
-    TranscriptionEngine,
+    whisper_cpp::{WhisperEngine, WhisperInferenceParams},
+    SpeechModel, TranscribeOptions,
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -32,8 +31,8 @@ pub struct ModelStateEvent {
 
 enum LoadedEngine {
     Whisper(WhisperEngine),
-    Parakeet(ParakeetEngine),
-    Moonshine(MoonshineEngine),
+    Parakeet(ParakeetModel),
+    Moonshine(MoonshineModel),
 }
 
 struct LoadingGuard {
@@ -191,14 +190,7 @@ impl TranscriptionManager {
 
         {
             let mut engine = self.lock_engine();
-            if let Some(ref mut loaded_engine) = *engine {
-                match loaded_engine {
-                    LoadedEngine::Whisper(ref mut e) => e.unload_model(),
-                    LoadedEngine::Parakeet(ref mut e) => e.unload_model(),
-                    LoadedEngine::Moonshine(ref mut e) => e.unload_model(),
-                }
-            }
-            *engine = None; // Drop the engine to free memory
+            *engine = None;
         }
         {
             let mut current_model = self.current_model_id.lock().unwrap();
@@ -273,66 +265,48 @@ impl TranscriptionManager {
 
         let model_path = self.model_manager.get_model_path(model_id)?;
 
-        // Create appropriate engine based on model type
+        let emit_loading_failed = |error_msg: &str| {
+            let _ = self.app_handle.emit(
+                "model-state-changed",
+                ModelStateEvent {
+                    event_type: "loading_failed".to_string(),
+                    model_id: Some(model_id.to_string()),
+                    model_name: Some(model_info.name.clone()),
+                    error: Some(error_msg.to_string()),
+                },
+            );
+        };
+
         let loaded_engine = match model_info.engine_type {
             EngineType::Whisper => {
-                let mut engine = WhisperEngine::new();
-                engine.load_model(&model_path).map_err(|e| {
+                let engine = WhisperEngine::load(&model_path).map_err(|e| {
                     let error_msg = format!("Failed to load whisper model {}: {}", model_id, e);
-                    let _ = self.app_handle.emit(
-                        "model-state-changed",
-                        ModelStateEvent {
-                            event_type: "loading_failed".to_string(),
-                            model_id: Some(model_id.to_string()),
-                            model_name: Some(model_info.name.clone()),
-                            error: Some(error_msg.clone()),
-                        },
-                    );
+                    emit_loading_failed(&error_msg);
                     anyhow::anyhow!(error_msg)
                 })?;
                 LoadedEngine::Whisper(engine)
             }
             EngineType::Parakeet => {
-                let mut engine = ParakeetEngine::new();
-                engine
-                    .load_model_with_params(&model_path, ParakeetModelParams::int8())
-                    .map_err(|e| {
+                let engine =
+                    ParakeetModel::load(&model_path, &Quantization::Int8).map_err(|e| {
                         let error_msg =
                             format!("Failed to load parakeet model {}: {}", model_id, e);
-                        let _ = self.app_handle.emit(
-                            "model-state-changed",
-                            ModelStateEvent {
-                                event_type: "loading_failed".to_string(),
-                                model_id: Some(model_id.to_string()),
-                                model_name: Some(model_info.name.clone()),
-                                error: Some(error_msg.clone()),
-                            },
-                        );
+                        emit_loading_failed(&error_msg);
                         anyhow::anyhow!(error_msg)
                     })?;
                 LoadedEngine::Parakeet(engine)
             }
             EngineType::Moonshine => {
-                let mut engine = MoonshineEngine::new();
-                engine
-                    .load_model_with_params(
-                        &model_path,
-                        MoonshineModelParams::variant(ModelVariant::Base),
-                    )
-                    .map_err(|e| {
-                        let error_msg =
-                            format!("Failed to load moonshine model {}: {}", model_id, e);
-                        let _ = self.app_handle.emit(
-                            "model-state-changed",
-                            ModelStateEvent {
-                                event_type: "loading_failed".to_string(),
-                                model_id: Some(model_id.to_string()),
-                                model_name: Some(model_info.name.clone()),
-                                error: Some(error_msg.clone()),
-                            },
-                        );
-                        anyhow::anyhow!(error_msg)
-                    })?;
+                let engine = MoonshineModel::load(
+                    &model_path,
+                    MoonshineVariant::Base,
+                    &Quantization::default(),
+                )
+                .map_err(|e| {
+                    let error_msg = format!("Failed to load moonshine model {}: {}", model_id, e);
+                    emit_loading_failed(&error_msg);
+                    anyhow::anyhow!(error_msg)
+                })?;
                 LoadedEngine::Moonshine(engine)
             }
         };
@@ -457,24 +431,29 @@ impl TranscriptionManager {
                         let params = WhisperInferenceParams {
                             language: whisper_language,
                             translate: settings.translate_to_english,
+                            initial_prompt: if settings.custom_words.is_empty() {
+                                None
+                            } else {
+                                Some(settings.custom_words.join(", "))
+                            },
                             ..Default::default()
                         };
 
                         whisper_engine
-                            .transcribe_samples(audio, Some(params))
+                            .transcribe_with(&audio, &params)
                             .map_err(|e| anyhow::anyhow!("Whisper transcription failed: {}", e))
                     }
                     LoadedEngine::Parakeet(parakeet_engine) => {
-                        let params = ParakeetInferenceParams {
-                            timestamp_granularity: TimestampGranularity::Segment,
+                        let params = ParakeetParams {
+                            timestamp_granularity: Some(TimestampGranularity::Segment),
                             ..Default::default()
                         };
                         parakeet_engine
-                            .transcribe_samples(audio, Some(params))
+                            .transcribe_with(&audio, &params)
                             .map_err(|e| anyhow::anyhow!("Parakeet transcription failed: {}", e))
                     }
                     LoadedEngine::Moonshine(moonshine_engine) => moonshine_engine
-                        .transcribe_samples(audio, None)
+                        .transcribe(&audio, &TranscribeOptions::default())
                         .map_err(|e| anyhow::anyhow!("Moonshine transcription failed: {}", e)),
                 }
             }));
@@ -522,8 +501,13 @@ impl TranscriptionManager {
             }
         };
 
-        // Apply word correction if custom words are configured
-        let corrected_result = if !settings.custom_words.is_empty() {
+        let is_whisper = self
+            .model_manager
+            .get_model_info(&settings.selected_model)
+            .map(|info| matches!(info.engine_type, EngineType::Whisper))
+            .unwrap_or(false);
+
+        let corrected_result = if !settings.custom_words.is_empty() && !is_whisper {
             apply_custom_words(
                 &result.text,
                 &settings.custom_words,
