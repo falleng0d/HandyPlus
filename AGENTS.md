@@ -21,7 +21,12 @@ bun run tauri build
 
 # Frontend only development
 bun run dev        # Start Vite dev server
+
+# Checck for issues (rust and typescript linting and auto formatting, replaces tscx)
+bun check
 ```
+
+Use `bun check` instead of `tscx` for linting and formatting. It runs both Rust and TypeScript checks in one command.
 
 ## Architecture Overview
 
