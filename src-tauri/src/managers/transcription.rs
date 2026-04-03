@@ -13,6 +13,7 @@ use std::time::{Duration, SystemTime};
 use tauri::{AppHandle, Emitter, Manager};
 use transcribe_rs::{
     onnx::{
+        cohere::CohereModel,
         moonshine::{MoonshineModel, MoonshineVariant},
         parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity},
         Quantization,
@@ -33,6 +34,7 @@ enum LoadedEngine {
     Whisper(WhisperEngine),
     Parakeet(ParakeetModel),
     Moonshine(MoonshineModel),
+    Cohere(CohereModel),
 }
 
 struct LoadingGuard {
@@ -309,6 +311,14 @@ impl TranscriptionManager {
                 })?;
                 LoadedEngine::Moonshine(engine)
             }
+            EngineType::Cohere => {
+                let engine = CohereModel::load(&model_path, &Quantization::Int8).map_err(|e| {
+                    let error_msg = format!("Failed to load cohere model {}: {}", model_id, e);
+                    emit_loading_failed(&error_msg);
+                    anyhow::anyhow!(error_msg)
+                })?;
+                LoadedEngine::Cohere(engine)
+            }
         };
 
         // Update the current engine and model ID
@@ -455,6 +465,26 @@ impl TranscriptionManager {
                     LoadedEngine::Moonshine(moonshine_engine) => moonshine_engine
                         .transcribe(&audio, &TranscribeOptions::default())
                         .map_err(|e| anyhow::anyhow!("Moonshine transcription failed: {}", e)),
+                    LoadedEngine::Cohere(cohere_engine) => {
+                        let language = if settings.selected_language == "auto" {
+                            None
+                        } else if settings.selected_language == "zh-Hans"
+                            || settings.selected_language == "zh-Hant"
+                        {
+                            Some("zh".to_string())
+                        } else {
+                            Some(settings.selected_language.clone())
+                        };
+
+                        let options = TranscribeOptions {
+                            language,
+                            ..Default::default()
+                        };
+
+                        cohere_engine
+                            .transcribe(&audio, &options)
+                            .map_err(|e| anyhow::anyhow!("Cohere transcription failed: {}", e))
+                    }
                 }
             }));
 

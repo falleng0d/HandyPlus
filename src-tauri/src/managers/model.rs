@@ -21,6 +21,7 @@ pub enum EngineType {
     Whisper,
     Parakeet,
     Moonshine,
+    Cohere,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -250,6 +251,28 @@ impl ModelManager {
                 engine_type: EngineType::Moonshine,
                 accuracy_score: 0.70,
                 speed_score: 0.90,
+            },
+        );
+
+        available_models.insert(
+            "cohere-int8".to_string(),
+            ModelInfo {
+                id: "cohere-int8".to_string(),
+                name: "Cohere".to_string(),
+                description: "A large, slower, but very accurate multilingual model.".to_string(),
+                filename: "cohere-int8".to_string(),
+                url: Some("https://blob.handy.computer/cohere-int8.tar.gz".to_string()),
+                sha256: Some(
+                    "ea2257d52434f3644574f187dcdcf666e302cd11b92866116ab8e14cd9c887f0".to_string(),
+                ),
+                size_mb: 1708,
+                is_downloaded: false,
+                is_downloading: false,
+                partial_size: 0,
+                is_directory: true,
+                engine_type: EngineType::Cohere,
+                accuracy_score: 0.90,
+                speed_score: 0.60,
             },
         );
 

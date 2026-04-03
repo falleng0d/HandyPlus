@@ -150,7 +150,7 @@ export const ModelInfoSchema = z.object({
   is_downloading: z.boolean(),
   partial_size: z.number(),
   is_directory: z.boolean(),
-  engine_type: z.enum(["Whisper", "Parakeet", "Moonshine"]),
+  engine_type: z.enum(["Whisper", "Parakeet", "Moonshine", "Cohere"]),
   accuracy_score: z.number(),
   speed_score: z.number(),
 });
