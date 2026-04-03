@@ -14,7 +14,7 @@
     "format:check": "prettier --check . && cd src-tauri && cargo fmt -- --check",
     "format:frontend": "prettier --write .",
     "format:backend": "cd src-tauri && cargo fmt",
-    "check": "prettier --write . --log-level silent && tscx src && cd src-tauri && cargo fmt -- --check"
+    "check": "prettier --write . --log-level silent && tscx src && cd src-tauri && cargo fmt && cargo check"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.16",
