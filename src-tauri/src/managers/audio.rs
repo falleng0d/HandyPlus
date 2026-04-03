@@ -39,6 +39,10 @@ fn create_audio_recorder(
 ) -> Result<AudioRecorder, anyhow::Error> {
     let silero = SileroVad::new(vad_path, vad_threshold)
         .map_err(|e| anyhow::anyhow!("Failed to create SileroVad: {}", e))?;
+    debug!(
+        "[VAD] Silero VAD initialized with threshold {} prefill {} hangover {} onset {}",
+        vad_threshold, vad_prefill_frames, vad_hangover_frames, vad_onset_frames
+    );
     let smoothed_vad = SmoothedVad::new(
         Box::new(silero),
         vad_prefill_frames,
