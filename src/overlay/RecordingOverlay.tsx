@@ -9,9 +9,9 @@ type OverlayState = "recording" | "transcribing";
 const RecordingOverlay: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [state, setState] = useState<OverlayState>("recording");
-  const [levels, setLevels] = useState<number[]>(Array(16).fill(0));
+  const [levels, setLevels] = useState<number[]>(Array(9).fill(0));
   const [isVadActive, setIsVadActive] = useState(false);
-  const smoothedLevelsRef = useRef<number[]>(Array(16).fill(0));
+  const smoothedLevelsRef = useRef<number[]>(Array(9).fill(0));
 
   useEffect(() => {
     const setupEventListeners = async () => {
