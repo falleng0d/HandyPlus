@@ -22,7 +22,7 @@ bun run tauri build
 # Frontend only development
 bun run dev        # Start Vite dev server
 
-# Checck for issues (rust and typescript linting and auto formatting, replaces tscx)
+# Checck for issues (rust and typescript linting and auto formatting and build check, replaces tscx, cargo check, cargo fmt, prettier)
 bun check
 ```
 
