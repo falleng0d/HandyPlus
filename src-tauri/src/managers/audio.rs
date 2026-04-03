@@ -60,6 +60,12 @@ fn create_audio_recorder(
             move |levels| {
                 utils::emit_levels(&app_handle, &levels);
             }
+        })
+        .with_vad_state_callback({
+            let app_handle = app_handle.clone();
+            move |active| {
+                utils::emit_vad_active(&app_handle, active);
+            }
         });
 
     Ok(recorder)

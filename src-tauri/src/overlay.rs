@@ -201,6 +201,7 @@ pub fn show_recording_overlay(app_handle: &AppHandle) {
     }
 
     show_overlay_window(app_handle, "recording");
+    emit_vad_active(app_handle, false);
 }
 
 /// Shows the transcribing overlay window
@@ -212,6 +213,7 @@ pub fn show_transcribing_overlay(app_handle: &AppHandle) {
     }
 
     show_overlay_window(app_handle, "transcribing");
+    emit_vad_active(app_handle, false);
 }
 
 /// Updates the overlay window position based on current settings
@@ -230,6 +232,7 @@ pub fn hide_recording_overlay(app_handle: &AppHandle) {
     // we still want to hide it properly
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
         debug!("Recording overlay: requested hide with fade-out animation");
+        emit_vad_active(app_handle, false);
         match overlay_window.emit("hide-overlay", ()) {
             Ok(()) => debug!("Recording overlay: emitted hide-overlay"),
             Err(err) => warn!("Recording overlay: failed to emit hide-overlay: {}", err),
@@ -265,5 +268,13 @@ pub fn emit_levels(app_handle: &AppHandle, levels: &Vec<f32>) {
     // also emit to the recording overlay if it's open
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
         let _ = overlay_window.emit("mic-level", levels);
+    }
+}
+
+pub fn emit_vad_active(app_handle: &AppHandle, active: bool) {
+    let _ = app_handle.emit("vad-active", active);
+
+    if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
+        let _ = overlay_window.emit("vad-active", active);
     }
 }

@@ -28,6 +28,7 @@ pub struct AudioRecorder {
     worker_handle: Option<std::thread::JoinHandle<()>>,
     vad: Option<Arc<Mutex<Box<dyn vad::VoiceActivityDetector>>>>,
     level_cb: Option<Arc<dyn Fn(Vec<f32>) + Send + Sync + 'static>>,
+    vad_state_cb: Option<Arc<dyn Fn(bool) + Send + Sync + 'static>>,
 }
 
 impl AudioRecorder {
@@ -38,6 +39,7 @@ impl AudioRecorder {
             worker_handle: None,
             vad: None,
             level_cb: None,
+            vad_state_cb: None,
         })
     }
 
@@ -51,6 +53,14 @@ impl AudioRecorder {
         F: Fn(Vec<f32>) + Send + Sync + 'static,
     {
         self.level_cb = Some(Arc::new(cb));
+        self
+    }
+
+    pub fn with_vad_state_callback<F>(mut self, cb: F) -> Self
+    where
+        F: Fn(bool) + Send + Sync + 'static,
+    {
+        self.vad_state_cb = Some(Arc::new(cb));
         self
     }
 
@@ -74,6 +84,7 @@ impl AudioRecorder {
         let vad = self.vad.clone();
         // Move the optional level callback into the worker thread
         let level_cb = self.level_cb.clone();
+        let vad_state_cb = self.vad_state_cb.clone();
 
         let worker = std::thread::spawn(move || {
             let config = AudioRecorder::get_preferred_config(&thread_device)
@@ -117,7 +128,7 @@ impl AudioRecorder {
             stream.play().expect("failed to start stream");
 
             // keep the stream alive while we process samples
-            run_consumer(sample_rate, vad, sample_rx, cmd_rx, level_cb);
+            run_consumer(sample_rate, vad, sample_rx, cmd_rx, level_cb, vad_state_cb);
             // stream is dropped here, after run_consumer returns
         });
 
@@ -228,6 +239,7 @@ fn run_consumer(
     sample_rx: mpsc::Receiver<Vec<f32>>,
     cmd_rx: mpsc::Receiver<Cmd>,
     level_cb: Option<Arc<dyn Fn(Vec<f32>) + Send + Sync + 'static>>,
+    vad_state_cb: Option<Arc<dyn Fn(bool) + Send + Sync + 'static>>,
 ) {
     let mut frame_resampler = FrameResampler::new(
         in_sample_rate as usize,
@@ -237,6 +249,7 @@ fn run_consumer(
 
     let mut processed_samples = Vec::<f32>::new();
     let mut recording = false;
+    let mut vad_active = false;
 
     // ---------- spectrum visualisation setup ---------------------------- //
     const BUCKETS: usize = 16;
@@ -257,16 +270,31 @@ fn run_consumer(
         out_buf: &mut Vec<f32>,
         visualizer: &mut AudioVisualiser,
         level_cb: &Option<Arc<dyn Fn(Vec<f32>) + Send + Sync + 'static>>,
+        vad_state_cb: &Option<Arc<dyn Fn(bool) + Send + Sync + 'static>>,
+        vad_active: &mut bool,
         silent_levels: &[f32],
     ) {
         if !recording {
             return;
         }
 
+        let set_vad_state =
+            |next: bool,
+             vad_active: &mut bool,
+             vad_state_cb: &Option<Arc<dyn Fn(bool) + Send + Sync + 'static>>| {
+                if *vad_active != next {
+                    *vad_active = next;
+                    if let Some(cb) = vad_state_cb {
+                        cb(next);
+                    }
+                }
+            };
+
         if let Some(vad_arc) = vad {
             let mut det = vad_arc.lock().unwrap();
             match det.push_frame(samples).unwrap_or(VadFrame::Speech(samples)) {
                 VadFrame::Speech(buf) => {
+                    set_vad_state(true, vad_active, vad_state_cb);
                     out_buf.extend_from_slice(buf);
                     if let Some(buckets) = visualizer.feed(buf) {
                         if let Some(cb) = level_cb {
@@ -275,6 +303,7 @@ fn run_consumer(
                     }
                 }
                 VadFrame::Noise => {
+                    set_vad_state(false, vad_active, vad_state_cb);
                     visualizer.reset();
                     if let Some(cb) = level_cb {
                         cb(silent_levels.to_vec());
@@ -282,6 +311,7 @@ fn run_consumer(
                 }
             }
         } else {
+            set_vad_state(true, vad_active, vad_state_cb);
             out_buf.extend_from_slice(samples);
             if let Some(buckets) = visualizer.feed(samples) {
                 if let Some(cb) = level_cb {
@@ -306,6 +336,8 @@ fn run_consumer(
                 &mut processed_samples,
                 &mut visualizer,
                 &level_cb,
+                &vad_state_cb,
+                &mut vad_active,
                 &silent_levels,
             )
         });
@@ -316,9 +348,13 @@ fn run_consumer(
                 Cmd::Start => {
                     processed_samples.clear();
                     recording = true;
+                    vad_active = false;
                     visualizer.reset(); // Reset visualization buffer
                     if let Some(cb) = &level_cb {
                         cb(silent_levels.clone());
+                    }
+                    if let Some(cb) = &vad_state_cb {
+                        cb(false);
                     }
                     if let Some(v) = &vad {
                         v.lock().unwrap().reset();
@@ -336,9 +372,18 @@ fn run_consumer(
                             &mut processed_samples,
                             &mut visualizer,
                             &level_cb,
+                            &vad_state_cb,
+                            &mut vad_active,
                             &silent_levels,
                         )
                     });
+
+                    if vad_active {
+                        vad_active = false;
+                        if let Some(cb) = &vad_state_cb {
+                            cb(false);
+                        }
+                    }
 
                     let _ = reply_tx.send(std::mem::take(&mut processed_samples));
                 }
