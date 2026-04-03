@@ -1,11 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import React, { useEffect, useRef, useState } from "react";
-import {
-  CancelIcon,
-  MicrophoneIcon,
-  TranscriptionIcon,
-} from "../components/icons";
+import { CancelIcon, TranscriptionIcon } from "../components/icons";
 import "./RecordingOverlay.css";
 
 type OverlayState = "recording" | "transcribing";
@@ -64,7 +60,13 @@ const RecordingOverlay: React.FC = () => {
 
   const getIcon = () => {
     if (state === "recording") {
-      return <MicrophoneIcon />;
+      return (
+        <div className="vad-status-container">
+          <div
+            className={`vad-status-dot ${isVadActive ? "vad-status-dot-active" : ""}`}
+          />
+        </div>
+      );
     } else {
       return <TranscriptionIcon />;
     }
