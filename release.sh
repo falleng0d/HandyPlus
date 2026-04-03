@@ -162,15 +162,10 @@ build_release_notes_prompt() {
   local release_tag="$2"
   local previous_tag="$3"
 
-  if [[ -n "$previous_tag" ]]; then
-    cat <<EOF
-Edit the existing RELEASE_NOTES.md file in the current working directory.
+  local requirements
 
-Release tag: ${release_tag}
-Previous release tag: ${previous_tag}
-
-Requirements:
-- Do not build the project, it is already built.
+  readline -r -d '' requirements <<'EOR'
+- DO NOT BUILD THE PROJECT, IT IS ALREADY BUILT.
 - Use git history and diffs to understand the real shipped changes.
 - Focus on user-visible features, fixes, UI changes, and notable maintenance work.
 - Be accurate and do not invent changes.
@@ -187,6 +182,19 @@ Requirements:
 - Do not print the release notes to stdout as the final answer.
 - Your task is only complete after RELEASE_NOTES.md exists on disk.
 - Keep the file as valid GitHub-flavored Markdown.
+
+Again, DO NOT BUILD THE PROJECT, IT IS ALREADY BUILT. You only need to edit the existing RELEASE_NOTES.md file to replace the TODOs with real release notes based on the git history since the previous release tag.
+EOR
+
+  if [[ -n "$previous_tag" ]]; then
+    cat <<EOF
+Edit the existing RELEASE_NOTES.md file in the current working directory.
+
+Release tag: ${release_tag}
+Previous release tag: ${previous_tag}
+
+Requirements:
+${requirements}
 EOF
   else
     cat <<EOF
@@ -195,22 +203,7 @@ Edit the existing RELEASE_NOTES.md file in the current working directory.
 Release tag: ${release_tag}
 
 Requirements:
-- Do not build the project, it is already built.
-- Use git history and diffs to understand the real shipped changes.
-- Focus on user-visible features, fixes, UI changes, and notable maintenance work.
-- Be accurate and do not invent changes.
-- RELEASE_NOTES.md already contains the exact structure that must be preserved.
-- You must edit RELEASE_NOTES.md in place.
-- Use your file editing tools to modify RELEASE_NOTES.md.
-- Do not stop after only reading the file.
-- Replace every placeholder bullet line that currently says - TODO with a real bullet.
-- The task is not complete if any TODO remains in RELEASE_NOTES.md.
-- Do not change the headings.
-- Do not add any new headings, sections, intro text, outro text, or follow-up questions.
-- Do not add a changelog URL or compare URL.
-- Do not print the release notes to stdout as the final answer.
-- Your task is only complete after RELEASE_NOTES.md exists on disk.
-- Keep the file as valid GitHub-flavored Markdown.
+${requirements}
 EOF
   fi
 }
