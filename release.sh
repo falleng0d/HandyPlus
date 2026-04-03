@@ -56,33 +56,8 @@ is_windows_bash() {
   esac
 }
 
-resolve_windows_command() {
-  local name="$1"
-  local resolved
-
-  if ! is_windows_bash; then
-    return 1
-  fi
-
-  resolved="$(command where.exe "$name" 2>/dev/null | tr -d '\r' | head -n 1)"
-  [[ -n "$resolved" ]] || return 1
-
-  if command -v cygpath >/dev/null 2>&1; then
-    cygpath -u "$resolved"
-  else
-    printf '%s\n' "$resolved"
-  fi
-}
-
 pick_command() {
   local name="$1"
-  local windows_candidate=""
-
-  windows_candidate="$(resolve_windows_command "$name" || true)"
-  if [[ -n "$windows_candidate" ]]; then
-    printf '%s\n' "$windows_candidate"
-    return 0
-  fi
 
   command -v "$name" >/dev/null 2>&1 || return 1
   command -v "$name"
@@ -189,7 +164,7 @@ build_release_notes_prompt() {
 
   if [[ -n "$previous_tag" ]]; then
     cat <<EOF
-Create the file RELEASE_NOTES.md in the current working directory with GitHub release notes for HandyPlus ${version}.
+Edit the existing RELEASE_NOTES.md file in the current working directory.
 
 Release tag: ${release_tag}
 Previous release tag: ${previous_tag}
@@ -198,28 +173,23 @@ Requirements:
 - Use git history and diffs to understand the real shipped changes.
 - Focus on user-visible features, fixes, UI changes, and notable maintenance work.
 - Be accurate and do not invent changes.
-- Write the final release description to RELEASE_NOTES.md.
-- Overwrite RELEASE_NOTES.md if it already exists.
+- RELEASE_NOTES.md already contains the exact structure that must be preserved.
+- You must edit RELEASE_NOTES.md in place.
+- Use your file editing tools to modify RELEASE_NOTES.md.
+- Do not stop after only reading the file.
+- Replace the placeholder bullet TODO bullet lines.
+- Replace every placeholder bullet line that currently says - TODO with a real bullet.
+- The task is not complete if any TODO remains in RELEASE_NOTES.md.
+- Do not change the headings.
+- Do not add any new headings, sections, intro text, outro text, or follow-up questions.
+- Do not add a changelog URL or compare URL.
 - Do not print the release notes to stdout as the final answer.
 - Your task is only complete after RELEASE_NOTES.md exists on disk.
-- The file must contain ONLY the final GitHub release body in Markdown.
-- Do not include any intro text, outro text, or follow-up questions.
-- Do not wrap the file contents in code fences.
-- Use exactly this structure:
-
-## HandyPlus ${version}
-
-## Summary
-- ...
-
-## Details
-- ...
-
-Replace the ellipses with real bullets. Do not add any other headings or text before or after this structure.
+- Keep the file as valid GitHub-flavored Markdown.
 EOF
   else
     cat <<EOF
-Create the file RELEASE_NOTES.md in the current working directory with GitHub release notes for the first semver HandyPlus ${version} release.
+Edit the existing RELEASE_NOTES.md file in the current working directory.
 
 Release tag: ${release_tag}
 
@@ -227,41 +197,66 @@ Requirements:
 - Use git history and diffs to understand the real shipped changes.
 - Focus on user-visible features, fixes, UI changes, and notable maintenance work.
 - Be accurate and do not invent changes.
-- Write the final release description to RELEASE_NOTES.md.
-- Overwrite RELEASE_NOTES.md if it already exists.
+- RELEASE_NOTES.md already contains the exact structure that must be preserved.
+- You must edit RELEASE_NOTES.md in place.
+- Use your file editing tools to modify RELEASE_NOTES.md.
+- Do not stop after only reading the file.
+- Replace every placeholder bullet line that currently says - TODO with a real bullet.
+- The task is not complete if any TODO remains in RELEASE_NOTES.md.
+- Do not change the headings.
+- Do not add any new headings, sections, intro text, outro text, or follow-up questions.
+- Do not add a changelog URL or compare URL.
 - Do not print the release notes to stdout as the final answer.
 - Your task is only complete after RELEASE_NOTES.md exists on disk.
-- The file must contain ONLY the final GitHub release body in Markdown.
-- Do not include any intro text, outro text, or follow-up questions.
-- Do not wrap the file contents in code fences.
-- Use exactly this structure:
+- Keep the file as valid GitHub-flavored Markdown.
+EOF
+  fi
+}
 
+write_release_notes_template() {
+  local version="$1"
+  local output_file="$2"
+
+  cat > "$output_file" <<EOF
 ## HandyPlus ${version}
 
 ## Summary
-- ...
+- TODO
 
 ## Details
-- ...
+- TODO
 
-Replace the ellipses with real bullets. Do not add any other headings or text before or after this structure.
+## Commits
+- TODO
 EOF
-  fi
 }
 
 generate_release_notes() {
   local model="$1"
   local prompt="$2"
-  local output_file="$3"
+  local version="$3"
+  local output_file="$4"
   local run_log_file
 
   run_log_file="$(mktemp)"
-  rm -f "$output_file"
+  write_release_notes_template "$version" "$output_file"
 
-  if ! "$OPENCODE_BIN" run --model "$model" "$prompt" > "$run_log_file"; then
+  # echo "Using $OPENCODE_BIN to generate release notes with model $model with prompt:" >&2
+  # echo "----------------------------------------" >&2
+  # echo "$prompt" >&2
+  # echo "----------------------------------------" >&2
+
+  if ! "$OPENCODE_BIN" run --pure  --model "$model" "$prompt" > "$run_log_file"; then
     cat "$run_log_file" >&2
     rm -f "$run_log_file"
     die "Failed to generate release notes with opencode"
+  fi
+
+  # check if the placeholder TODOs were replaced
+  if grep -q 'TODO' "$output_file"; then
+    cat "$run_log_file" >&2
+    rm -f "$run_log_file"
+    die "Release notes generation incomplete: some TODOs were not replaced"
   fi
 
   rm -f "$run_log_file"
@@ -349,7 +344,7 @@ require_command mktemp
 
 GH_BIN="$(pick_command gh)" || die "Required command not found: gh"
 BUN_BIN="$(pick_command bun)" || die "Required command not found: bun"
-OPENCODE_BIN="$(resolve_windows_command opencode.cmd || pick_command opencode)" || die "Required command not found: opencode"
+OPENCODE_BIN="$(pick_command opencode)" || die "Required command not found: opencode"
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "Not inside a git repository"
 cd "$repo_root"
@@ -413,7 +408,7 @@ if git rev-parse -q --verify "refs/tags/$release_tag" >/dev/null; then
 fi
 
 release_notes_prompt="$(build_release_notes_prompt "$version" "$release_tag" "$previous_tag")"
-generate_release_notes "$opencode_model" "$release_notes_prompt" "$notes_file"
+generate_release_notes "$opencode_model" "$release_notes_prompt" "$version" "$notes_file"
 
 if (( dry_run == 1 )); then
   printf 'Version: %s\n' "$version"
