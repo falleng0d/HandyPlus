@@ -170,6 +170,7 @@ Release tag: ${release_tag}
 Previous release tag: ${previous_tag}
 
 Requirements:
+- Do not build the project, it is already built.
 - Use git history and diffs to understand the real shipped changes.
 - Focus on user-visible features, fixes, UI changes, and notable maintenance work.
 - Be accurate and do not invent changes.
@@ -194,6 +195,7 @@ Edit the existing RELEASE_NOTES.md file in the current working directory.
 Release tag: ${release_tag}
 
 Requirements:
+- Do not build the project, it is already built.
 - Use git history and diffs to understand the real shipped changes.
 - Focus on user-visible features, fixes, UI changes, and notable maintenance work.
 - Be accurate and do not invent changes.
