@@ -242,18 +242,22 @@ fn run_consumer(
     const BUCKETS: usize = 16;
     const WINDOW_SIZE: usize = 512;
     let mut visualizer = AudioVisualiser::new(
-        in_sample_rate,
+        constants::WHISPER_SAMPLE_RATE,
         WINDOW_SIZE,
         BUCKETS,
         400.0,  // vocal_min_hz
         4000.0, // vocal_max_hz
     );
+    let silent_levels = vec![0.0; BUCKETS];
 
     fn handle_frame(
         samples: &[f32],
         recording: bool,
         vad: &Option<Arc<Mutex<Box<dyn vad::VoiceActivityDetector>>>>,
         out_buf: &mut Vec<f32>,
+        visualizer: &mut AudioVisualiser,
+        level_cb: &Option<Arc<dyn Fn(Vec<f32>) + Send + Sync + 'static>>,
+        silent_levels: &[f32],
     ) {
         if !recording {
             return;
@@ -262,11 +266,28 @@ fn run_consumer(
         if let Some(vad_arc) = vad {
             let mut det = vad_arc.lock().unwrap();
             match det.push_frame(samples).unwrap_or(VadFrame::Speech(samples)) {
-                VadFrame::Speech(buf) => out_buf.extend_from_slice(buf),
-                VadFrame::Noise => {}
+                VadFrame::Speech(buf) => {
+                    out_buf.extend_from_slice(buf);
+                    if let Some(buckets) = visualizer.feed(buf) {
+                        if let Some(cb) = level_cb {
+                            cb(buckets);
+                        }
+                    }
+                }
+                VadFrame::Noise => {
+                    visualizer.reset();
+                    if let Some(cb) = level_cb {
+                        cb(silent_levels.to_vec());
+                    }
+                }
             }
         } else {
             out_buf.extend_from_slice(samples);
+            if let Some(buckets) = visualizer.feed(samples) {
+                if let Some(cb) = level_cb {
+                    cb(buckets);
+                }
+            }
         }
     }
 
@@ -276,16 +297,17 @@ fn run_consumer(
             Err(_) => break, // stream closed
         };
 
-        // ---------- spectrum processing ---------------------------------- //
-        if let Some(buckets) = visualizer.feed(&raw) {
-            if let Some(cb) = &level_cb {
-                cb(buckets);
-            }
-        }
-
         // ---------- existing pipeline ------------------------------------ //
         frame_resampler.push(&raw, &mut |frame: &[f32]| {
-            handle_frame(frame, recording, &vad, &mut processed_samples)
+            handle_frame(
+                frame,
+                recording,
+                &vad,
+                &mut processed_samples,
+                &mut visualizer,
+                &level_cb,
+                &silent_levels,
+            )
         });
 
         // non-blocking check for a command
@@ -295,6 +317,9 @@ fn run_consumer(
                     processed_samples.clear();
                     recording = true;
                     visualizer.reset(); // Reset visualization buffer
+                    if let Some(cb) = &level_cb {
+                        cb(silent_levels.clone());
+                    }
                     if let Some(v) = &vad {
                         v.lock().unwrap().reset();
                     }
@@ -304,7 +329,15 @@ fn run_consumer(
 
                     frame_resampler.finish(&mut |frame: &[f32]| {
                         // we still want to process the last few frames
-                        handle_frame(frame, true, &vad, &mut processed_samples)
+                        handle_frame(
+                            frame,
+                            true,
+                            &vad,
+                            &mut processed_samples,
+                            &mut visualizer,
+                            &level_cb,
+                            &silent_levels,
+                        )
                     });
 
                     let _ = reply_tx.send(std::mem::take(&mut processed_samples));
