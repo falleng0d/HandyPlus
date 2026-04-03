@@ -360,6 +360,22 @@ impl AudioRecordingManager {
         Ok(())
     }
 
+    pub fn reload_vad_settings(&self) -> Result<(), anyhow::Error> {
+        let was_open = *self.is_open.lock().unwrap();
+
+        if was_open {
+            self.stop_microphone_stream();
+        }
+
+        *self.recorder.lock().unwrap() = None;
+
+        if was_open {
+            self.start_microphone_stream()?;
+        }
+
+        Ok(())
+    }
+
     pub fn is_recording(&self) -> bool {
         *self.is_recording.lock().unwrap()
     }

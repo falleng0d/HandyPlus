@@ -21,6 +21,12 @@ fn custom_sound_exists(app: &AppHandle, sound_type: &str) -> bool {
         .map_or(false, |path| path.exists())
 }
 
+fn reload_vad_settings(app: &AppHandle) -> Result<(), String> {
+    let rm = app.state::<Arc<AudioRecordingManager>>();
+    rm.reload_vad_settings()
+        .map_err(|e| format!("Failed to reload VAD settings: {}", e))
+}
+
 #[tauri::command]
 pub fn check_custom_sounds(app: AppHandle) -> CustomSounds {
     CustomSounds {
@@ -105,6 +111,38 @@ pub fn get_selected_microphone(app: AppHandle) -> Result<String, String> {
     Ok(settings
         .selected_microphone
         .unwrap_or_else(|| "default".to_string()))
+}
+
+#[tauri::command]
+pub fn change_vad_threshold_setting(app: AppHandle, threshold: f32) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.vad_threshold = threshold;
+    write_settings(&app, settings);
+    reload_vad_settings(&app)
+}
+
+#[tauri::command]
+pub fn change_vad_prefill_frames_setting(app: AppHandle, frames: usize) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.vad_prefill_frames = frames;
+    write_settings(&app, settings);
+    reload_vad_settings(&app)
+}
+
+#[tauri::command]
+pub fn change_vad_hangover_frames_setting(app: AppHandle, frames: usize) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.vad_hangover_frames = frames;
+    write_settings(&app, settings);
+    reload_vad_settings(&app)
+}
+
+#[tauri::command]
+pub fn change_vad_onset_frames_setting(app: AppHandle, frames: usize) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.vad_onset_frames = frames;
+    write_settings(&app, settings);
+    reload_vad_settings(&app)
 }
 
 #[tauri::command]

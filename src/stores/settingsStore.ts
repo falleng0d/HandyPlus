@@ -74,6 +74,10 @@ const DEFAULT_SETTINGS: Partial<Settings> = {
   debug_mode: false,
   custom_words: [],
   history_limit: 5,
+  vad_threshold: 0.3,
+  vad_prefill_frames: 15,
+  vad_hangover_frames: 15,
+  vad_onset_frames: 2,
   mute_while_recording: false,
   lower_volume_while_recording: false,
   volume_while_recording: 0.5,
@@ -125,6 +129,14 @@ const settingUpdaters: {
   custom_words: (value) => invoke("update_custom_words", { words: value }),
   word_correction_threshold: (value) =>
     invoke("change_word_correction_threshold_setting", { threshold: value }),
+  vad_threshold: (value) =>
+    invoke("change_vad_threshold_setting", { threshold: value }),
+  vad_prefill_frames: (value) =>
+    invoke("change_vad_prefill_frames_setting", { frames: value }),
+  vad_hangover_frames: (value) =>
+    invoke("change_vad_hangover_frames_setting", { frames: value }),
+  vad_onset_frames: (value) =>
+    invoke("change_vad_onset_frames_setting", { frames: value }),
   paste_method: (value) =>
     invoke("change_paste_method_setting", { method: value }),
   clipboard_handling: (value) =>
