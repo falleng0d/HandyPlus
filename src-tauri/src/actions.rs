@@ -8,13 +8,54 @@ use crate::settings::{get_settings, AppSettings};
 use crate::state::LastTranscriptState;
 use crate::tray::{change_tray_icon, TrayIconState};
 use crate::utils;
-use log::{debug, error};
+use log::{debug, error, warn};
 use once_cell::sync::Lazy;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use tauri::AppHandle;
 use tauri::Manager;
+
+const TRANSCRIPTION_FIELD: &str = "transcription";
+
+fn strip_invisible_chars(text: &str) -> String {
+    text.replace(['\u{200B}', '\u{200C}', '\u{200D}', '\u{FEFF}'], "")
+}
+
+fn build_post_process_system_prompt(prompt_template: &str) -> String {
+    prompt_template.replace("${output}", "").trim().to_string()
+}
+
+fn structured_output_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "properties": {
+            TRANSCRIPTION_FIELD: {
+                "type": "string",
+                "description": "The cleaned and processed transcription text"
+            }
+        },
+        "required": [TRANSCRIPTION_FIELD],
+        "additionalProperties": false
+    })
+}
+
+fn parse_structured_transcription(content: &str) -> Option<String> {
+    match serde_json::from_str::<Value>(content) {
+        Ok(json) => json
+            .get(TRANSCRIPTION_FIELD)
+            .and_then(|value| value.as_str())
+            .map(strip_invisible_chars),
+        Err(err) => {
+            warn!(
+                "Failed to parse structured output JSON: {}. Falling back to raw content.",
+                err
+            );
+            None
+        }
+    }
+}
 
 // Shortcut Action Trait
 pub trait ShortcutAction: Send + Sync {
@@ -94,19 +135,69 @@ async fn maybe_post_process_transcription(
         provider.id, model
     );
 
-    // Replace variables in the prompt
     let dictionary_str = settings.custom_words.join(", ");
     let language_label = language_label_for_code(&settings.selected_language);
-    let processed_prompt = prompt
+    let templated_prompt = prompt
         .replace("${output}", transcription)
         .replace("${dictionary}", &dictionary_str)
         .replace("${language}", &language_label);
-    debug!("Processed prompt length: {} chars", processed_prompt.len());
 
-    match crate::llm_client::send_chat_completion(&provider, api_key, &model, processed_prompt)
+    if provider.supports_structured_output {
+        let system_prompt = build_post_process_system_prompt(
+            &prompt
+                .replace("${dictionary}", &dictionary_str)
+                .replace("${language}", &language_label),
+        );
+
+        match crate::llm_client::send_chat_completion_with_schema(
+            &provider,
+            api_key.clone(),
+            &model,
+            transcription.to_string(),
+            Some(system_prompt),
+            Some(structured_output_schema()),
+        )
+        .await
+        {
+            Ok(Some(content)) => {
+                if let Some(parsed) = parse_structured_transcription(&content) {
+                    debug!(
+                        "Structured LLM post-processing succeeded for provider '{}'. Output length: {} chars",
+                        provider.id,
+                        parsed.len()
+                    );
+                    return Some(parsed);
+                }
+
+                let content = strip_invisible_chars(&content);
+                warn!(
+                    "Structured output response for provider '{}' did not contain '{}'; using raw content.",
+                    provider.id,
+                    TRANSCRIPTION_FIELD
+                );
+                return Some(content);
+            }
+            Ok(None) => {
+                error!("LLM API response has no content");
+                return None;
+            }
+            Err(err) => {
+                warn!(
+                    "Structured output failed for provider '{}': {}. Falling back to plain-text mode.",
+                    provider.id,
+                    err
+                );
+            }
+        }
+    }
+
+    debug!("Processed prompt length: {} chars", templated_prompt.len());
+
+    match crate::llm_client::send_chat_completion(&provider, api_key, &model, templated_prompt)
         .await
     {
         Ok(Some(content)) => {
+            let content = strip_invisible_chars(&content);
             debug!(
                 "LLM post-processing succeeded for provider '{}'. Output length: {} chars",
                 provider.id,

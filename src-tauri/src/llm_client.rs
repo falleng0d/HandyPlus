@@ -2,6 +2,7 @@ use crate::settings::PostProcessProvider;
 use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE, REFERER, USER_AGENT};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug, Serialize)]
 struct ChatMessage {
@@ -10,9 +11,25 @@ struct ChatMessage {
 }
 
 #[derive(Debug, Serialize)]
+struct JsonSchema {
+    name: String,
+    strict: bool,
+    schema: Value,
+}
+
+#[derive(Debug, Serialize)]
+struct ResponseFormat {
+    #[serde(rename = "type")]
+    format_type: String,
+    json_schema: JsonSchema,
+}
+
+#[derive(Debug, Serialize)]
 struct ChatCompletionRequest {
     model: String,
     messages: Vec<ChatMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    response_format: Option<ResponseFormat>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -77,6 +94,17 @@ pub async fn send_chat_completion(
     model: &str,
     prompt: String,
 ) -> Result<Option<String>, String> {
+    send_chat_completion_with_schema(provider, api_key, model, prompt, None, None).await
+}
+
+pub async fn send_chat_completion_with_schema(
+    provider: &PostProcessProvider,
+    api_key: String,
+    model: &str,
+    user_content: String,
+    system_prompt: Option<String>,
+    json_schema: Option<Value>,
+) -> Result<Option<String>, String> {
     let base_url = provider.base_url.trim_end_matches('/');
     let url = format!("{}/chat/completions", base_url);
 
@@ -84,12 +112,33 @@ pub async fn send_chat_completion(
 
     let client = create_client(provider, &api_key)?;
 
+    let mut messages = Vec::new();
+
+    if let Some(system) = system_prompt {
+        messages.push(ChatMessage {
+            role: "system".to_string(),
+            content: system,
+        });
+    }
+
+    messages.push(ChatMessage {
+        role: "user".to_string(),
+        content: user_content,
+    });
+
+    let response_format = json_schema.map(|schema| ResponseFormat {
+        format_type: "json_schema".to_string(),
+        json_schema: JsonSchema {
+            name: "transcription_output".to_string(),
+            strict: true,
+            schema,
+        },
+    });
+
     let request_body = ChatCompletionRequest {
         model: model.to_string(),
-        messages: vec![ChatMessage {
-            role: "user".to_string(),
-            content: prompt,
-        }],
+        messages,
+        response_format,
     };
 
     let response = client
