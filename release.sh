@@ -3,15 +3,15 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: ./release.sh [--repo OWNER/REPO] [--model MODEL]
+Usage: sh ./release.sh [--repo OWNER/REPO] [--model MODEL] [--allow-dirty] [--dry-run]
 
 Creates a GitHub release for the current version from `package.json`.
 
 What it does:
-- validates a clean git worktree
+- validates a clean git worktree unless `--allow-dirty` is used
 - infers the GitHub repo from `origin` unless `--repo` is provided
 - fetches origin tags and matches the existing semver tag format (`0.8.1` vs `v0.8.1`)
-- asks `opencode run` to generate release notes from commits since the previous release tag
+- asks `opencode run` to explore commits since the previous release tag and write `RELEASE_NOTES.md`
 - builds the application with `bun run build`
 - finds current-version release assets under `src-tauri/target/release`
 - creates and pushes the git tag if needed
@@ -20,12 +20,15 @@ What it does:
 Options:
   --repo OWNER/REPO   Override the GitHub repo derived from `origin`
   --model MODEL       Override the opencode model
+  --allow-dirty       Allow running with local uncommitted changes
+  --dry-run           Print the resolved release metadata and generated notes, then exit
   -h, --help          Show this help message
 
 Examples:
-  ./release.sh
-  ./release.sh --repo falleng0d/HandyPlus
-  ./release.sh --model opencode/minimax-m2.5-free
+  sh ./release.sh
+  sh ./release.sh --repo falleng0d/HandyPlus
+  sh ./release.sh --model opencode/minimax-m2.5-free
+  sh ./release.sh --dry-run --allow-dirty
 EOF
 }
 
@@ -36,6 +39,53 @@ die() {
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
+}
+
+is_windows_bash() {
+  if command -v where.exe >/dev/null 2>&1; then
+    return 0
+  fi
+
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+resolve_windows_command() {
+  local name="$1"
+  local resolved
+
+  if ! is_windows_bash; then
+    return 1
+  fi
+
+  resolved="$(command where.exe "$name" 2>/dev/null | tr -d '\r' | head -n 1)"
+  [[ -n "$resolved" ]] || return 1
+
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -u "$resolved"
+  else
+    printf '%s\n' "$resolved"
+  fi
+}
+
+pick_command() {
+  local name="$1"
+  local windows_candidate=""
+
+  windows_candidate="$(resolve_windows_command "$name" || true)"
+  if [[ -n "$windows_candidate" ]]; then
+    printf '%s\n' "$windows_candidate"
+    return 0
+  fi
+
+  command -v "$name" >/dev/null 2>&1 || return 1
+  command -v "$name"
 }
 
 infer_repo_from_origin() {
@@ -136,66 +186,88 @@ build_release_notes_prompt() {
   local version="$1"
   local release_tag="$2"
   local previous_tag="$3"
-  local repo_root="$4"
 
   if [[ -n "$previous_tag" ]]; then
     cat <<EOF
-You are preparing GitHub release notes for HandyPlus ${version}.
+Create the file RELEASE_NOTES.md in the current working directory with GitHub release notes for HandyPlus ${version}.
 
-Repository root: ${repo_root}
-Current release tag to create: ${release_tag}
+Release tag: ${release_tag}
 Previous release tag: ${previous_tag}
 
-Task:
-- Explore every commit in the range ${previous_tag}..HEAD.
-- Use git log, git show, and git diff as needed to understand the real user-visible changes.
-- Focus on shipped behavior, bug fixes, UI improvements, and noteworthy maintenance work.
+Requirements:
+- Use git history and diffs to understand the real shipped changes.
+- Focus on user-visible features, fixes, UI changes, and notable maintenance work.
 - Be accurate and do not invent changes.
+- Write the final release description to RELEASE_NOTES.md.
+- Overwrite RELEASE_NOTES.md if it already exists.
+- Do not print the release notes to stdout as the final answer.
+- Your task is only complete after RELEASE_NOTES.md exists on disk.
+- The file must contain ONLY the final GitHub release body in Markdown.
+- Do not include any intro text, outro text, or follow-up questions.
+- Do not wrap the file contents in code fences.
+- Use exactly this structure:
 
-Output requirements:
-- Return ONLY GitHub-flavored Markdown for the release description.
-- Do not include any preamble or closing commentary.
-- Do not wrap the whole response in code fences.
-- Keep it concise and useful for a GitHub release page.
+## HandyPlus ${version}
 
-Preferred structure:
 ## Summary
-- 3 to 6 bullets
+- ...
 
 ## Details
-- 2 to 8 bullets
+- ...
 
-If a section would be empty, omit it.
+Replace the ellipses with real bullets. Do not add any other headings or text before or after this structure.
 EOF
   else
     cat <<EOF
-You are preparing the first semver GitHub release notes for HandyPlus ${version}.
+Create the file RELEASE_NOTES.md in the current working directory with GitHub release notes for the first semver HandyPlus ${version} release.
 
-Repository root: ${repo_root}
-Current release tag to create: ${release_tag}
+Release tag: ${release_tag}
 
-Task:
-- Explore the commit history reachable from HEAD.
-- Use git log, git show, and git diff as needed to understand the real user-visible changes.
-- Focus on shipped behavior, bug fixes, UI improvements, and noteworthy maintenance work.
+Requirements:
+- Use git history and diffs to understand the real shipped changes.
+- Focus on user-visible features, fixes, UI changes, and notable maintenance work.
 - Be accurate and do not invent changes.
+- Write the final release description to RELEASE_NOTES.md.
+- Overwrite RELEASE_NOTES.md if it already exists.
+- Do not print the release notes to stdout as the final answer.
+- Your task is only complete after RELEASE_NOTES.md exists on disk.
+- The file must contain ONLY the final GitHub release body in Markdown.
+- Do not include any intro text, outro text, or follow-up questions.
+- Do not wrap the file contents in code fences.
+- Use exactly this structure:
 
-Output requirements:
-- Return ONLY GitHub-flavored Markdown for the release description.
-- Do not include any preamble or closing commentary.
-- Do not wrap the whole response in code fences.
-- Keep it concise and useful for a GitHub release page.
+## HandyPlus ${version}
 
-Preferred structure:
 ## Summary
-- 3 to 6 bullets
+- ...
 
 ## Details
-- 2 to 8 bullets
+- ...
 
-If a section would be empty, omit it.
+Replace the ellipses with real bullets. Do not add any other headings or text before or after this structure.
 EOF
   fi
+}
+
+generate_release_notes() {
+  local model="$1"
+  local prompt="$2"
+  local output_file="$3"
+  local run_log_file
+
+  run_log_file="$(mktemp)"
+  rm -f "$output_file"
+
+  if ! "$OPENCODE_BIN" run --model "$model" "$prompt" > "$run_log_file"; then
+    cat "$run_log_file" >&2
+    rm -f "$run_log_file"
+    die "Failed to generate release notes with opencode"
+  fi
+
+  rm -f "$run_log_file"
+
+  [[ -f "$output_file" ]] || die "RELEASE_NOTES.md was not created"
+  [[ -s "$output_file" ]] || die "RELEASE_NOTES.md is empty"
 }
 
 collect_release_assets() {
@@ -239,6 +311,8 @@ collect_release_assets() {
 
 repo_override=""
 opencode_model="opencode/minimax-m2.5-free"
+allow_dirty=0
+dry_run=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -251,6 +325,12 @@ while [[ $# -gt 0 ]]; do
       shift
       [[ $# -gt 0 ]] || die "Missing value for --model"
       opencode_model="$1"
+      ;;
+    --allow-dirty)
+      allow_dirty=1
+      ;;
+    --dry-run)
+      dry_run=1
       ;;
     -h|--help)
       usage
@@ -265,20 +345,26 @@ done
 
 require_command git
 require_command jq
-require_command gh
-require_command bun
-require_command opencode
 require_command mktemp
+
+GH_BIN="$(pick_command gh)" || die "Required command not found: gh"
+BUN_BIN="$(pick_command bun)" || die "Required command not found: bun"
+OPENCODE_BIN="$(resolve_windows_command opencode.cmd || pick_command opencode)" || die "Required command not found: opencode"
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "Not inside a git repository"
 cd "$repo_root"
 
-validate_clean_worktree
+if (( allow_dirty == 0 )); then
+  validate_clean_worktree
+fi
 validate_version_consistency
 
 version="$(read_package_version)"
 head_commit="$(git rev-parse HEAD)"
 origin_url="$(git remote get-url origin 2>/dev/null)" || die "Failed to resolve origin remote"
+notes_file="$repo_root/RELEASE_NOTES.md"
+
+trap 'rm -f "$notes_file"' EXIT
 
 if [[ -n "$repo_override" ]]; then
   repo="$repo_override"
@@ -314,10 +400,6 @@ if [[ ${#semver_tags[@]} -gt 0 ]]; then
   fi
 fi
 
-if gh release view "$release_tag" --repo "$repo" >/dev/null 2>&1; then
-  die "Release $release_tag already exists on $repo"
-fi
-
 remote_tag_commit="$(resolve_remote_tag_commit "$release_tag")"
 if [[ -n "$remote_tag_commit" && "$remote_tag_commit" != "$head_commit" ]]; then
   die "Remote tag $release_tag already exists on origin and does not point to HEAD"
@@ -330,15 +412,30 @@ if git rev-parse -q --verify "refs/tags/$release_tag" >/dev/null; then
   }
 fi
 
-notes_file="$(mktemp)"
-trap 'rm -f "$notes_file"' EXIT
+release_notes_prompt="$(build_release_notes_prompt "$version" "$release_tag" "$previous_tag")"
+generate_release_notes "$opencode_model" "$release_notes_prompt" "$notes_file"
 
-release_notes_prompt="$(build_release_notes_prompt "$version" "$release_tag" "$previous_tag" "$repo_root")"
-opencode run --dir "$repo_root" --model "$opencode_model" "$release_notes_prompt" > "$notes_file"
+if (( dry_run == 1 )); then
+  printf 'Version: %s\n' "$version"
+  printf 'Tag: %s\n' "$release_tag"
+  printf 'Repo: %s\n' "$repo"
+  if [[ -n "$previous_tag" ]]; then
+    printf 'Previous tag: %s\n' "$previous_tag"
+  else
+    printf 'Previous tag: <none>\n'
+  fi
+  printf '\n'
+  printf '%s\n' 'Generated description:'
+  printf '%s\n' '---'
+  cat "$notes_file"
+  exit 0
+fi
 
-[[ -s "$notes_file" ]] || die "Generated release notes are empty"
+if "$GH_BIN" release view "$release_tag" --repo "$repo" >/dev/null 2>&1; then
+  die "Release $release_tag already exists on $repo"
+fi
 
-bun run build
+"$BUN_BIN" run build
 
 declare -a RELEASE_ASSETS=()
 collect_release_assets "$version" "$repo_root/src-tauri/target/release"
@@ -352,7 +449,7 @@ if [[ -z "$remote_tag_commit" ]]; then
 fi
 
 release_cmd=(
-  gh release create "$release_tag"
+  "$GH_BIN" release create "$release_tag"
   --repo "$repo"
   --title "$release_tag"
   --notes-file "$notes_file"
