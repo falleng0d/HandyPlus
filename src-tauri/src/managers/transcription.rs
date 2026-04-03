@@ -409,6 +409,31 @@ impl TranscriptionManager {
         // Get current settings for configuration
         let settings = get_settings(&self.app_handle);
 
+        let validated_language = if settings.selected_language == "auto" {
+            "auto".to_string()
+        } else {
+            let is_supported = self
+                .model_manager
+                .get_model_info(&settings.selected_model)
+                .map(|info| {
+                    info.supported_languages.is_empty()
+                        || info
+                            .supported_languages
+                            .contains(&settings.selected_language)
+                })
+                .unwrap_or(true);
+
+            if is_supported {
+                settings.selected_language.clone()
+            } else {
+                warn!(
+                    "Language '{}' not supported by current model, falling back to auto-detect",
+                    settings.selected_language
+                );
+                "auto".to_string()
+            }
+        };
+
         // Run engine inference without holding the mutex so a panic cannot poison it.
         let result = {
             let mut engine_guard = self.lock_engine();
@@ -425,15 +450,15 @@ impl TranscriptionManager {
             let transcribe_result = catch_unwind(AssertUnwindSafe(|| -> Result<_> {
                 match &mut engine {
                     LoadedEngine::Whisper(whisper_engine) => {
-                        let whisper_language = if settings.selected_language == "auto" {
+                        let whisper_language = if validated_language == "auto" {
                             None
                         } else {
-                            let normalized = if settings.selected_language == "zh-Hans"
-                                || settings.selected_language == "zh-Hant"
+                            let normalized = if validated_language == "zh-Hans"
+                                || validated_language == "zh-Hant"
                             {
                                 "zh".to_string()
                             } else {
-                                settings.selected_language.clone()
+                                validated_language.clone()
                             };
                             Some(normalized)
                         };
@@ -466,14 +491,13 @@ impl TranscriptionManager {
                         .transcribe(&audio, &TranscribeOptions::default())
                         .map_err(|e| anyhow::anyhow!("Moonshine transcription failed: {}", e)),
                     LoadedEngine::Cohere(cohere_engine) => {
-                        let language = if settings.selected_language == "auto" {
+                        let language = if validated_language == "auto" {
                             None
-                        } else if settings.selected_language == "zh-Hans"
-                            || settings.selected_language == "zh-Hant"
+                        } else if validated_language == "zh-Hans" || validated_language == "zh-Hant"
                         {
                             Some("zh".to_string())
                         } else {
-                            Some(settings.selected_language.clone())
+                            Some(validated_language.clone())
                         };
 
                         let options = TranscribeOptions {

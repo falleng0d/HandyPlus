@@ -153,6 +153,11 @@ export const ModelInfoSchema = z.object({
   engine_type: z.enum(["Whisper", "Parakeet", "Moonshine", "Cohere"]),
   accuracy_score: z.number(),
   speed_score: z.number(),
+  supports_translation: z.boolean(),
+  is_recommended: z.boolean(),
+  supported_languages: z.array(z.string()),
+  supports_language_selection: z.boolean(),
+  is_custom: z.boolean(),
 });
 
 export type ModelInfo = z.infer<typeof ModelInfoSchema>;
