@@ -31,11 +31,20 @@ pub enum MicrophoneMode {
 
 fn create_audio_recorder(
     vad_path: &str,
+    vad_threshold: f32,
+    vad_prefill_frames: usize,
+    vad_hangover_frames: usize,
+    vad_onset_frames: usize,
     app_handle: &tauri::AppHandle,
 ) -> Result<AudioRecorder, anyhow::Error> {
-    let silero = SileroVad::new(vad_path, 0.3)
+    let silero = SileroVad::new(vad_path, vad_threshold)
         .map_err(|e| anyhow::anyhow!("Failed to create SileroVad: {}", e))?;
-    let smoothed_vad = SmoothedVad::new(Box::new(silero), 15, 15, 2);
+    let smoothed_vad = SmoothedVad::new(
+        Box::new(silero),
+        vad_prefill_frames,
+        vad_hangover_frames,
+        vad_onset_frames,
+    );
 
     // Recorder with VAD plus a spectrum-level callback that forwards updates to
     // the frontend.
@@ -214,17 +223,19 @@ impl AudioRecordingManager {
                 tauri::path::BaseDirectory::Resource,
             )
             .map_err(|e| anyhow::anyhow!("Failed to resolve VAD path: {}", e))?;
+        let settings = get_settings(&self.app_handle);
         let mut recorder_opt = self.recorder.lock().unwrap();
 
         if recorder_opt.is_none() {
             *recorder_opt = Some(create_audio_recorder(
                 vad_path.to_str().unwrap(),
+                settings.vad_threshold,
+                settings.vad_prefill_frames,
+                settings.vad_hangover_frames,
+                settings.vad_onset_frames,
                 &self.app_handle,
             )?);
         }
-
-        // Get the selected device from settings
-        let settings = get_settings(&self.app_handle);
         let selected_device = if let Some(device_name) = settings.selected_microphone {
             // Find the device by name
             match list_input_devices() {

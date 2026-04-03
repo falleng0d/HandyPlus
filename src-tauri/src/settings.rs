@@ -235,6 +235,14 @@ pub struct AppSettings {
     pub clipboard_handling: ClipboardHandling,
     #[serde(default = "default_typing_interval_ms")]
     pub typing_interval_ms: u64,
+    #[serde(default = "default_vad_threshold")]
+    pub vad_threshold: f32,
+    #[serde(default = "default_vad_prefill_frames")]
+    pub vad_prefill_frames: usize,
+    #[serde(default = "default_vad_hangover_frames")]
+    pub vad_hangover_frames: usize,
+    #[serde(default = "default_vad_onset_frames")]
+    pub vad_onset_frames: usize,
     #[serde(default = "default_post_process_enabled")]
     pub post_process_enabled: bool,
     #[serde(default = "default_post_process_provider_id")]
@@ -312,6 +320,22 @@ fn default_history_limit() -> usize {
 
 fn default_typing_interval_ms() -> u64 {
     10
+}
+
+fn default_vad_threshold() -> f32 {
+    0.3
+}
+
+fn default_vad_prefill_frames() -> usize {
+    15
+}
+
+fn default_vad_hangover_frames() -> usize {
+    15
+}
+
+fn default_vad_onset_frames() -> usize {
+    2
 }
 
 fn default_audio_feedback_volume() -> f32 {
@@ -529,6 +553,10 @@ pub fn get_default_settings() -> AppSettings {
         paste_method: PasteMethod::default(),
         clipboard_handling: ClipboardHandling::default(),
         typing_interval_ms: default_typing_interval_ms(),
+        vad_threshold: default_vad_threshold(),
+        vad_prefill_frames: default_vad_prefill_frames(),
+        vad_hangover_frames: default_vad_hangover_frames(),
+        vad_onset_frames: default_vad_onset_frames(),
         post_process_enabled: default_post_process_enabled(),
         post_process_provider_id: default_post_process_provider_id(),
         post_process_providers: default_post_process_providers(),

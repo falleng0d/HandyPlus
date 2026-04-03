@@ -106,6 +106,10 @@ export const SettingsSchema = z.object({
   paste_method: PasteMethodSchema.optional().default("ctrl_v"),
   clipboard_handling: ClipboardHandlingSchema.optional().default("dont_modify"),
   typing_interval_ms: z.number().optional().default(0),
+  vad_threshold: z.number().optional().default(0.3),
+  vad_prefill_frames: z.number().optional().default(15),
+  vad_hangover_frames: z.number().optional().default(15),
+  vad_onset_frames: z.number().optional().default(2),
   post_process_enabled: z.boolean().optional().default(false),
   post_process_provider_id: z.string().optional().default("openai"),
   post_process_providers: z
