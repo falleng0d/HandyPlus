@@ -14,6 +14,7 @@ const RecordingOverlay: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [state, setState] = useState<OverlayState>("recording");
   const [levels, setLevels] = useState<number[]>(Array(16).fill(0));
+  const [isVadActive, setIsVadActive] = useState(false);
   const smoothedLevelsRef = useRef<number[]>(Array(16).fill(0));
 
   useEffect(() => {
@@ -28,6 +29,7 @@ const RecordingOverlay: React.FC = () => {
       // Listen for hide-overlay event from Rust
       const unlistenHide = await listen("hide-overlay", () => {
         setIsVisible(false);
+        setIsVadActive(false);
       });
 
       // Listen for mic-level updates
@@ -44,15 +46,20 @@ const RecordingOverlay: React.FC = () => {
         setLevels(smoothed.slice(0, 9));
       });
 
+      const unlistenVad = await listen<boolean>("vad-active", (event) => {
+        setIsVadActive(Boolean(event.payload));
+      });
+
       // Cleanup function
       return () => {
         unlistenShow();
         unlistenHide();
         unlistenLevel();
+        unlistenVad();
       };
     };
 
-    setupEventListeners();
+    void setupEventListeners();
   }, []);
 
   const getIcon = () => {
@@ -73,11 +80,12 @@ const RecordingOverlay: React.FC = () => {
             {levels.map((v, i) => (
               <div
                 key={i}
-                className="bar"
+                className={`bar ${isVadActive ? "bar-vad-active" : ""}`}
                 style={{
                   height: `${Math.min(20, 4 + Math.pow(v, 0.7) * 16)}px`, // Cap at 20px max height
                   transition: "height 60ms ease-out, opacity 120ms ease-out",
                   opacity: Math.max(0.2, v * 1.7), // Minimum opacity for visibility
+                  animationDelay: `${i * 70}ms`,
                 }}
               />
             ))}

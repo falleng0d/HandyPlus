@@ -40,12 +40,40 @@
 }
 
 .bar {
+  position: relative;
   width: 6px;
   background: #ffe5ee;
   max-height: 20px;
   border-radius: 2px;
-  transition: height 80ms linear;
+  transition:
+    height 80ms linear,
+    opacity 140ms ease-out,
+    transform 180ms ease-out,
+    box-shadow 220ms ease-out,
+    filter 220ms ease-out;
   min-height: 4px;
+  overflow: hidden;
+  will-change: height, opacity, transform, box-shadow, filter;
+}
+
+.bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, #ffb0ce 0%, #ff85b5 100%);
+  opacity: 0;
+  transition: opacity 220ms ease-out;
+}
+
+.bar-vad-active {
+  transform: translateY(-1px);
+  box-shadow: 0 0 8px rgba(255, 133, 181, 0.18);
+  animation: vad-scan 700ms ease-in-out infinite;
+}
+
+.bar-vad-active::after {
+  opacity: 1;
 }
 
 .recording-overlay.fade-in {
@@ -67,6 +95,18 @@
   }
   50% {
     opacity: 1;
+  }
+}
+
+@keyframes vad-scan {
+  100% {
+    filter: brightness(1);
+    box-shadow: 0 0 8px rgba(255, 133, 181, 0.18);
+  }
+
+  45% {
+    filter: brightness(1.18);
+    box-shadow: 0 0 12px rgba(255, 133, 181, 0.38);
   }
 }
 
