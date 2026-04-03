@@ -276,29 +276,10 @@ fn run_consumer(
             Err(_) => break, // stream closed
         };
 
-        // ---------- check VAD state before emitting levels -------- //
-        let is_speech = if let Some(vad_arc) = &vad {
-            let mut det = vad_arc.lock().unwrap();
-            let test_frame: Vec<f32> = raw.iter().take(480).cloned().collect();
-            if test_frame.len() >= 240 {
-                matches!(
-                    det.push_frame(&test_frame)
-                        .unwrap_or(VadFrame::Speech(&test_frame)),
-                    VadFrame::Speech(_)
-                )
-            } else {
-                false
-            }
-        } else {
-            recording // if no VAD, use recording state
-        };
-
-        // ---------- spectrum processing (only emit when speech detected) ---- //
-        if is_speech {
-            if let Some(buckets) = visualizer.feed(&raw) {
-                if let Some(cb) = &level_cb {
-                    cb(buckets);
-                }
+        // ---------- spectrum processing ---------------------------------- //
+        if let Some(buckets) = visualizer.feed(&raw) {
+            if let Some(cb) = &level_cb {
+                cb(buckets);
             }
         }
 
