@@ -1,5 +1,6 @@
 use super::{VadFrame, VoiceActivityDetector};
 use anyhow::Result;
+use log::debug;
 use std::collections::VecDeque;
 
 pub struct SmoothedVad {
@@ -47,7 +48,7 @@ impl VoiceActivityDetector for SmoothedVad {
 
         // 2. Delegate to the wrapped boolean VAD
         let is_voice = self.inner_vad.is_voice(frame)?;
-        // println!("Is Voice: {}", is_voice);
+        // debug!("Is Voice: {}", is_voice);
 
         match (self.in_speech, is_voice) {
             // Potential start of speech - need to accumulate onset frames
@@ -58,6 +59,8 @@ impl VoiceActivityDetector for SmoothedVad {
                     self.in_speech = true;
                     self.hangover_counter = self.hangover_frames;
                     self.onset_counter = 0; // Reset for next time
+
+                    debug!("[VAD] Speech detected - start of speech");
 
                     // Collect prefill + current frame
                     self.temp_out.clear();
@@ -83,6 +86,7 @@ impl VoiceActivityDetector for SmoothedVad {
                     self.hangover_counter -= 1;
                     Ok(VadFrame::Speech(frame))
                 } else {
+                    debug!("[VAD] Speech ended - no more speech detected");
                     self.in_speech = false;
                     Ok(VadFrame::Noise)
                 }
