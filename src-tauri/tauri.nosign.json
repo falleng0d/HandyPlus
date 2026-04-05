@@ -29,9 +29,7 @@
       "assetProtocol": {
         "enable": true,
         "scope": {
-          "allow": [
-            "**"
-          ],
+          "allow": ["**"],
           "requireLiteralLeadingDot": false
         }
       }
@@ -41,9 +39,7 @@
     "active": true,
     "createUpdaterArtifacts": false,
     "targets": "all",
-    "resources": [
-      "resources/**/*"
-    ],
+    "resources": ["resources/**/*"],
     "license": "MIT",
     "icon": [
       "icons/32x32.png",
@@ -82,9 +78,7 @@
       ]
     },
     "sql": {
-      "preload": [
-        "sqlite:history.db"
-      ]
+      "preload": ["sqlite:history.db"]
     }
   }
 }
