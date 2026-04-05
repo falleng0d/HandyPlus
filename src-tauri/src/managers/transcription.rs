@@ -13,9 +13,12 @@ use std::time::{Duration, SystemTime};
 use tauri::{AppHandle, Emitter, Manager};
 use transcribe_rs::{
     onnx::{
+        canary::{CanaryModel, CanaryParams},
         cohere::CohereModel,
-        moonshine::{MoonshineModel, MoonshineVariant},
+        gigaam::{GigaAMModel, GigaAMParams},
+        moonshine::{MoonshineModel, MoonshineStreamingParams, MoonshineVariant, StreamingModel},
         parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity},
+        sense_voice::{SenseVoiceModel, SenseVoiceParams},
         Quantization,
     },
     whisper_cpp::{WhisperEngine, WhisperInferenceParams},
@@ -34,6 +37,10 @@ enum LoadedEngine {
     Whisper(WhisperEngine),
     Parakeet(ParakeetModel),
     Moonshine(MoonshineModel),
+    MoonshineStreaming(StreamingModel),
+    SenseVoice(SenseVoiceModel),
+    GigaAM(GigaAMModel),
+    Canary(CanaryModel),
     Cohere(CohereModel),
 }
 
@@ -307,18 +314,42 @@ impl TranscriptionManager {
                 LoadedEngine::Moonshine(engine)
             }
             EngineType::MoonshineStreaming => {
-                return Err(anyhow::anyhow!(
-                    "MoonshineStreaming engine not yet implemented"
-                ));
+                let engine = StreamingModel::load(&model_path, 0, &Quantization::default())
+                    .map_err(|e| {
+                        let error_msg = format!(
+                            "Failed to load moonshine streaming model {}: {}",
+                            model_id, e
+                        );
+                        emit_loading_failed(&error_msg);
+                        anyhow::anyhow!(error_msg)
+                    })?;
+                LoadedEngine::MoonshineStreaming(engine)
             }
             EngineType::SenseVoice => {
-                return Err(anyhow::anyhow!("SenseVoice engine not yet implemented"));
+                let engine =
+                    SenseVoiceModel::load(&model_path, &Quantization::Int8).map_err(|e| {
+                        let error_msg =
+                            format!("Failed to load sensevoice model {}: {}", model_id, e);
+                        emit_loading_failed(&error_msg);
+                        anyhow::anyhow!(error_msg)
+                    })?;
+                LoadedEngine::SenseVoice(engine)
             }
             EngineType::GigaAM => {
-                return Err(anyhow::anyhow!("GigaAM engine not yet implemented"));
+                let engine = GigaAMModel::load(&model_path, &Quantization::Int8).map_err(|e| {
+                    let error_msg = format!("Failed to load gigaam model {}: {}", model_id, e);
+                    emit_loading_failed(&error_msg);
+                    anyhow::anyhow!(error_msg)
+                })?;
+                LoadedEngine::GigaAM(engine)
             }
             EngineType::Canary => {
-                return Err(anyhow::anyhow!("Canary engine not yet implemented"));
+                let engine = CanaryModel::load(&model_path, &Quantization::Int8).map_err(|e| {
+                    let error_msg = format!("Failed to load canary model {}: {}", model_id, e);
+                    emit_loading_failed(&error_msg);
+                    anyhow::anyhow!(error_msg)
+                })?;
+                LoadedEngine::Canary(engine)
             }
             EngineType::Cohere => {
                 let engine = CohereModel::load(&model_path, &Quantization::Int8).map_err(|e| {
@@ -499,6 +530,56 @@ impl TranscriptionManager {
                     LoadedEngine::Moonshine(moonshine_engine) => moonshine_engine
                         .transcribe(&audio, &TranscribeOptions::default())
                         .map_err(|e| anyhow::anyhow!("Moonshine transcription failed: {}", e)),
+                    LoadedEngine::MoonshineStreaming(moonshine_streaming_engine) => {
+                        let params = MoonshineStreamingParams::default();
+                        moonshine_streaming_engine
+                            .transcribe_with(&audio, &params)
+                            .map_err(|e| {
+                                anyhow::anyhow!("MoonshineStreaming transcription failed: {}", e)
+                            })
+                    }
+                    LoadedEngine::SenseVoice(sensevoice_engine) => {
+                        let normalized =
+                            if validated_language == "zh-Hans" || validated_language == "zh-Hant" {
+                                Some("zh".to_string())
+                            } else if validated_language == "yue" {
+                                Some("yue".to_string())
+                            } else {
+                                Some(validated_language.clone())
+                            };
+
+                        let params = SenseVoiceParams {
+                            language: normalized,
+                            ..Default::default()
+                        };
+
+                        sensevoice_engine
+                            .transcribe_with(&audio, &params)
+                            .map_err(|e| anyhow::anyhow!("SenseVoice transcription failed: {}", e))
+                    }
+                    LoadedEngine::GigaAM(gigaam_engine) => {
+                        let params = GigaAMParams::default();
+                        gigaam_engine
+                            .transcribe_with(&audio, &params)
+                            .map_err(|e| anyhow::anyhow!("GigaAM transcription failed: {}", e))
+                    }
+                    LoadedEngine::Canary(canary_engine) => {
+                        let normalized =
+                            if validated_language == "zh-Hans" || validated_language == "zh-Hant" {
+                                Some("zh".to_string())
+                            } else {
+                                Some(validated_language.clone())
+                            };
+
+                        let params = CanaryParams {
+                            language: normalized,
+                            ..Default::default()
+                        };
+
+                        canary_engine
+                            .transcribe_with(&audio, &params)
+                            .map_err(|e| anyhow::anyhow!("Canary transcription failed: {}", e))
+                    }
                     LoadedEngine::Cohere(cohere_engine) => {
                         let language = if validated_language == "auto" {
                             None
