@@ -306,6 +306,20 @@ impl TranscriptionManager {
                 })?;
                 LoadedEngine::Moonshine(engine)
             }
+            EngineType::MoonshineStreaming => {
+                return Err(anyhow::anyhow!(
+                    "MoonshineStreaming engine not yet implemented"
+                ));
+            }
+            EngineType::SenseVoice => {
+                return Err(anyhow::anyhow!("SenseVoice engine not yet implemented"));
+            }
+            EngineType::GigaAM => {
+                return Err(anyhow::anyhow!("GigaAM engine not yet implemented"));
+            }
+            EngineType::Canary => {
+                return Err(anyhow::anyhow!("Canary engine not yet implemented"));
+            }
             EngineType::Cohere => {
                 let engine = CohereModel::load(&model_path, &Quantization::Int8).map_err(|e| {
                     let error_msg = format!("Failed to load cohere model {}: {}", model_id, e);
