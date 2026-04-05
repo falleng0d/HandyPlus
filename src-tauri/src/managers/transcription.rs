@@ -13,10 +13,10 @@ use std::time::{Duration, SystemTime};
 use tauri::{AppHandle, Emitter, Manager};
 use transcribe_rs::{
     onnx::{
-        canary::{CanaryModel, CanaryParams},
+        canary::CanaryModel,
         cohere::CohereModel,
-        gigaam::{GigaAMModel, GigaAMParams},
-        moonshine::{MoonshineModel, MoonshineStreamingParams, MoonshineVariant, StreamingModel},
+        gigaam::GigaAMModel,
+        moonshine::{MoonshineModel, MoonshineVariant, StreamingModel},
         parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity},
         sense_voice::{SenseVoiceModel, SenseVoiceParams},
         Quantization,
@@ -531,53 +531,52 @@ impl TranscriptionManager {
                         .transcribe(&audio, &TranscribeOptions::default())
                         .map_err(|e| anyhow::anyhow!("Moonshine transcription failed: {}", e)),
                     LoadedEngine::MoonshineStreaming(moonshine_streaming_engine) => {
-                        let params = MoonshineStreamingParams::default();
                         moonshine_streaming_engine
-                            .transcribe_with(&audio, &params)
+                            .transcribe(&audio, &TranscribeOptions::default())
                             .map_err(|e| {
                                 anyhow::anyhow!("MoonshineStreaming transcription failed: {}", e)
                             })
                     }
                     LoadedEngine::SenseVoice(sensevoice_engine) => {
-                        let normalized =
-                            if validated_language == "zh-Hans" || validated_language == "zh-Hant" {
-                                Some("zh".to_string())
-                            } else if validated_language == "yue" {
-                                Some("yue".to_string())
-                            } else {
-                                Some(validated_language.clone())
-                            };
+                        let normalized = match validated_language.as_str() {
+                            "zh-Hans" | "zh-Hant" => Some("zh".to_string()),
+                            "en" => Some("en".to_string()),
+                            "ja" => Some("ja".to_string()),
+                            "ko" => Some("ko".to_string()),
+                            "yue" => Some("yue".to_string()),
+                            _ => None,
+                        };
 
                         let params = SenseVoiceParams {
                             language: normalized,
-                            ..Default::default()
+                            use_itn: Some(true),
                         };
 
                         sensevoice_engine
                             .transcribe_with(&audio, &params)
                             .map_err(|e| anyhow::anyhow!("SenseVoice transcription failed: {}", e))
                     }
-                    LoadedEngine::GigaAM(gigaam_engine) => {
-                        let params = GigaAMParams::default();
-                        gigaam_engine
-                            .transcribe_with(&audio, &params)
-                            .map_err(|e| anyhow::anyhow!("GigaAM transcription failed: {}", e))
-                    }
+                    LoadedEngine::GigaAM(gigaam_engine) => gigaam_engine
+                        .transcribe(&audio, &TranscribeOptions::default())
+                        .map_err(|e| anyhow::anyhow!("GigaAM transcription failed: {}", e)),
                     LoadedEngine::Canary(canary_engine) => {
-                        let normalized =
-                            if validated_language == "zh-Hans" || validated_language == "zh-Hant" {
-                                Some("zh".to_string())
-                            } else {
-                                Some(validated_language.clone())
-                            };
+                        let language = if validated_language == "auto" {
+                            None
+                        } else if validated_language == "zh-Hans" || validated_language == "zh-Hant"
+                        {
+                            Some("zh".to_string())
+                        } else {
+                            Some(validated_language.clone())
+                        };
 
-                        let params = CanaryParams {
-                            language: normalized,
+                        let options = TranscribeOptions {
+                            language,
+                            translate: settings.translate_to_english,
                             ..Default::default()
                         };
 
                         canary_engine
-                            .transcribe_with(&audio, &params)
+                            .transcribe(&audio, &options)
                             .map_err(|e| anyhow::anyhow!("Canary transcription failed: {}", e))
                     }
                     LoadedEngine::Cohere(cohere_engine) => {
