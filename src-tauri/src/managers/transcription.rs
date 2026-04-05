@@ -70,12 +70,7 @@ impl TranscriptionManager {
             model_manager,
             app_handle: app_handle.clone(),
             current_model_id: Arc::new(Mutex::new(None)),
-            last_activity: Arc::new(AtomicU64::new(
-                SystemTime::now()
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as u64,
-            )),
+            last_activity: Arc::new(AtomicU64::new(Self::now_ms())),
             shutdown_signal: Arc::new(AtomicBool::new(false)),
             watcher_handle: Arc::new(Mutex::new(None)),
             is_loading: Arc::new(Mutex::new(false)),
