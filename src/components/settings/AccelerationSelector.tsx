@@ -14,19 +14,14 @@ interface AccelerationSelectorProps {
   grouped?: boolean;
 }
 
-const whisperOptions = [
-  { value: "auto" as WhisperAcceleratorSetting, label: "Auto (Default)" },
-  { value: "cpu" as WhisperAcceleratorSetting, label: "CPU" },
-  { value: "gpu" as WhisperAcceleratorSetting, label: "GPU (CUDA)" },
-];
-
-const ortOptions = [
-  { value: "auto" as OrtAcceleratorSetting, label: "Auto (Default)" },
-  { value: "cpu" as OrtAcceleratorSetting, label: "CPU" },
-  { value: "cuda" as OrtAcceleratorSetting, label: "CUDA" },
-  { value: "directml" as OrtAcceleratorSetting, label: "DirectML" },
-  { value: "rocm" as OrtAcceleratorSetting, label: "ROCm" },
-];
+const labelMap: Record<string, string> = {
+  auto: "Auto (Default)",
+  cpu: "CPU",
+  gpu: "GPU (CUDA)",
+  cuda: "CUDA",
+  directml: "DirectML",
+  rocm: "ROCm",
+};
 
 export const AccelerationSelector: React.FC<AccelerationSelectorProps> = ({
   descriptionMode = "inline",
@@ -57,45 +52,27 @@ export const AccelerationSelector: React.FC<AccelerationSelectorProps> = ({
     loadAccelerators();
   }, []);
 
-  const handleWhisperChange = async (
-    event: React.ChangeEvent<HTMLSelectElement>,
-  ) => {
-    const newValue = event.target.value as WhisperAcceleratorSetting;
-    try {
-      await invoke("change_whisper_accelerator_setting", {
-        accelerator: newValue,
-      });
-      updateSetting("whisper_accelerator", newValue);
-    } catch (error) {
-      console.error("Failed to update whisper accelerator:", error);
-    }
-  };
+  const whisperOptions = useMemo(() => {
+    const options = availableAccelerators?.whisper ?? ["auto", "cpu", "gpu"];
+    return options.map((value) => ({
+      value: value as WhisperAcceleratorSetting,
+      label: labelMap[value] ?? value,
+    }));
+  }, [availableAccelerators]);
 
-  const handleOrtChange = async (
-    event: React.ChangeEvent<HTMLSelectElement>,
-  ) => {
-    const newValue = event.target.value as OrtAcceleratorSetting;
-    try {
-      await invoke("change_ort_accelerator_setting", {
-        accelerator: newValue,
-      });
-      updateSetting("ort_accelerator", newValue);
-    } catch (error) {
-      console.error("Failed to update ORT accelerator:", error);
-    }
-  };
-
-  const handleGpuDeviceChange = async (
-    event: React.ChangeEvent<HTMLSelectElement>,
-  ) => {
-    const newValue = parseInt(event.target.value, 10);
-    try {
-      await invoke("change_whisper_gpu_device", { device: newValue });
-      updateSetting("whisper_gpu_device", newValue);
-    } catch (error) {
-      console.error("Failed to update GPU device:", error);
-    }
-  };
+  const ortOptions = useMemo(() => {
+    const options = availableAccelerators?.ort ?? [
+      "auto",
+      "cpu",
+      "cuda",
+      "directml",
+      "rocm",
+    ];
+    return options.map((value) => ({
+      value: value as OrtAcceleratorSetting,
+      label: labelMap[value] ?? value,
+    }));
+  }, [availableAccelerators]);
 
   const gpuDeviceOptions = useMemo(() => {
     const options = [{ value: "-1", label: "Default Device" }];
@@ -112,6 +89,41 @@ export const AccelerationSelector: React.FC<AccelerationSelectorProps> = ({
     }
     return options;
   }, [availableAccelerators]);
+
+  const handleWhisperChange = async (
+    event: React.ChangeEvent<HTMLSelectElement>,
+  ) => {
+    const newValue = event.target.value as WhisperAcceleratorSetting;
+    try {
+      await updateSetting("whisper_accelerator", newValue);
+    } catch (error) {
+      console.error("Failed to update whisper accelerator:", error);
+    }
+  };
+
+  const handleOrtChange = async (
+    event: React.ChangeEvent<HTMLSelectElement>,
+  ) => {
+    const newValue = event.target.value as OrtAcceleratorSetting;
+    try {
+      await updateSetting("ort_accelerator", newValue);
+    } catch (error) {
+      console.error("Failed to update ORT accelerator:", error);
+    }
+  };
+
+  const handleGpuDeviceChange = async (
+    event: React.ChangeEvent<HTMLSelectElement>,
+  ) => {
+    const newValue = parseInt(event.target.value, 10);
+    try {
+      await updateSetting("whisper_gpu_device", newValue);
+    } catch (error) {
+      console.error("Failed to update GPU device:", error);
+    }
+  };
+
+  const isLoading = isLoadingAccelerators;
 
   return (
     <SettingContainer
@@ -133,7 +145,7 @@ export const AccelerationSelector: React.FC<AccelerationSelectorProps> = ({
                 target: { value },
               } as React.ChangeEvent<HTMLSelectElement>)
             }
-            disabled={false}
+            disabled={isLoading}
           />
         </div>
 
@@ -149,7 +161,7 @@ export const AccelerationSelector: React.FC<AccelerationSelectorProps> = ({
                 target: { value },
               } as React.ChangeEvent<HTMLSelectElement>)
             }
-            disabled={false}
+            disabled={isLoading}
           />
         </div>
 
@@ -165,7 +177,7 @@ export const AccelerationSelector: React.FC<AccelerationSelectorProps> = ({
                 target: { value },
               } as React.ChangeEvent<HTMLSelectElement>)
             }
-            disabled={isLoadingAccelerators}
+            disabled={isLoading}
           />
         </div>
       </div>
