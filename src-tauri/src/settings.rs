@@ -273,6 +273,12 @@ pub struct AppSettings {
     pub language_configs: Vec<LanguageConfig>,
     #[serde(default = "default_language_cycle_shortcut")]
     pub language_cycle_shortcut: String,
+    #[serde(default)]
+    pub whisper_accelerator: WhisperAcceleratorSetting,
+    #[serde(default)]
+    pub ort_accelerator: OrtAcceleratorSetting,
+    #[serde(default = "default_whisper_gpu_device")]
+    pub whisper_gpu_device: i32,
 }
 
 fn default_model() -> String {
@@ -501,6 +507,41 @@ fn default_pause_dragon_when_dictating() -> bool {
     false
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WhisperAcceleratorSetting {
+    Auto,
+    Cpu,
+    Gpu,
+}
+
+impl Default for WhisperAcceleratorSetting {
+    fn default() -> Self {
+        WhisperAcceleratorSetting::Auto
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OrtAcceleratorSetting {
+    Auto,
+    Cpu,
+    Cuda,
+    #[serde(rename = "directml")]
+    DirectMl,
+    Rocm,
+}
+
+impl Default for OrtAcceleratorSetting {
+    fn default() -> Self {
+        OrtAcceleratorSetting::Auto
+    }
+}
+
+fn default_whisper_gpu_device() -> i32 {
+    -1 // auto
+}
+
 fn default_language_cycle_shortcut() -> String {
     String::new()
 }
@@ -572,6 +613,9 @@ pub fn get_default_settings() -> AppSettings {
         pause_dragon_when_dictating: default_pause_dragon_when_dictating(),
         language_configs: Vec::new(),
         language_cycle_shortcut: default_language_cycle_shortcut(),
+        whisper_accelerator: WhisperAcceleratorSetting::default(),
+        ort_accelerator: OrtAcceleratorSetting::default(),
+        whisper_gpu_device: default_whisper_gpu_device(),
     }
 }
 

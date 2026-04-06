@@ -162,6 +162,12 @@ const settingUpdaters: {
     invoke("update_language_configs", { configs: value }),
   language_cycle_shortcut: (value) =>
     invoke("update_language_cycle_shortcut", { shortcut: value }),
+  whisper_accelerator: (value) =>
+    invoke("change_whisper_accelerator_setting", { accelerator: value }),
+  ort_accelerator: (value) =>
+    invoke("change_ort_accelerator_setting", { accelerator: value }),
+  whisper_gpu_device: (value) =>
+    invoke("change_whisper_gpu_device", { device: value }),
 };
 
 export const useSettingsStore = create<SettingsStore>()(
