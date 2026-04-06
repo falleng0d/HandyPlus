@@ -10,6 +10,7 @@ import { PasteMethodSetting } from "../PasteMethod";
 import { ClipboardHandlingSetting } from "../ClipboardHandling";
 import { TypingInterval } from "../TypingInterval";
 import { VadSettings } from "../VadSettings";
+import { AccelerationSelector } from "../AccelerationSelector";
 
 export const AdvancedSettings: React.FC = () => {
   return (
@@ -24,6 +25,7 @@ export const AdvancedSettings: React.FC = () => {
         <TranslateToEnglish descriptionMode="tooltip" grouped={true} />
         <ModelUnloadTimeoutSetting descriptionMode="tooltip" grouped={true} />
         <VadSettings descriptionMode="tooltip" grouped={true} />
+        <AccelerationSelector descriptionMode="tooltip" grouped={true} />
         <CustomWords descriptionMode="tooltip" grouped />
       </SettingsGroup>
     </div>
