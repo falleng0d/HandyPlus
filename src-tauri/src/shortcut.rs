@@ -710,3 +710,67 @@ pub fn resume_language_cycle_shortcut(app: AppHandle) -> Result<(), String> {
     }
     Ok(())
 }
+
+// ── Accelerator settings commands ────────────────────────────────────────────
+
+use crate::managers::transcription::{apply_accelerator_settings, AvailableAccelerators};
+
+#[tauri::command]
+pub fn change_whisper_accelerator_setting(
+    app: AppHandle,
+    accelerator: String,
+) -> Result<(), String> {
+    use crate::settings::WhisperAcceleratorSetting;
+    let parsed = match accelerator.as_str() {
+        "auto" => WhisperAcceleratorSetting::Auto,
+        "cpu" => WhisperAcceleratorSetting::Cpu,
+        "gpu" => WhisperAcceleratorSetting::Gpu,
+        other => {
+            eprintln!(
+                "Invalid whisper accelerator '{}', defaulting to auto",
+                other
+            );
+            WhisperAcceleratorSetting::Auto
+        }
+    };
+    let mut settings = crate::settings::get_settings(&app);
+    settings.whisper_accelerator = parsed;
+    crate::settings::write_settings(&app, settings);
+    apply_accelerator_settings(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn change_ort_accelerator_setting(app: AppHandle, accelerator: String) -> Result<(), String> {
+    use crate::settings::OrtAcceleratorSetting;
+    let parsed = match accelerator.as_str() {
+        "auto" => OrtAcceleratorSetting::Auto,
+        "cpu" => OrtAcceleratorSetting::Cpu,
+        "cuda" => OrtAcceleratorSetting::Cuda,
+        "directml" => OrtAcceleratorSetting::DirectMl,
+        "rocm" => OrtAcceleratorSetting::Rocm,
+        other => {
+            eprintln!("Invalid ORT accelerator '{}', defaulting to auto", other);
+            OrtAcceleratorSetting::Auto
+        }
+    };
+    let mut settings = crate::settings::get_settings(&app);
+    settings.ort_accelerator = parsed;
+    crate::settings::write_settings(&app, settings);
+    apply_accelerator_settings(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn change_whisper_gpu_device(app: AppHandle, device: i32) -> Result<(), String> {
+    let mut settings = crate::settings::get_settings(&app);
+    settings.whisper_gpu_device = device;
+    crate::settings::write_settings(&app, settings);
+    apply_accelerator_settings(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_available_accelerators() -> AvailableAccelerators {
+    crate::managers::transcription::get_available_accelerators()
+}

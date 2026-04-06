@@ -76,6 +76,9 @@ fn initialize_core_logic(app_handle: &AppHandle) {
         Arc::new(HistoryManager::new(app_handle).expect("Failed to initialize history manager"));
     let last_transcript_state = LastTranscriptState::new();
 
+    // Apply accelerator preferences before any model loads
+    managers::transcription::apply_accelerator_settings(app_handle);
+
     // Add managers to Tauri's managed state
     app_handle.manage(recording_manager.clone());
     app_handle.manage(model_manager.clone());
@@ -276,6 +279,10 @@ pub fn run() {
             shortcut::resume_language_shortcut,
             shortcut::suspend_language_cycle_shortcut,
             shortcut::resume_language_cycle_shortcut,
+            shortcut::change_whisper_accelerator_setting,
+            shortcut::change_ort_accelerator_setting,
+            shortcut::change_whisper_gpu_device,
+            shortcut::get_available_accelerators,
             command::change_mute_while_recording_setting,
             trigger_update_check,
             commands::cancel_operation,

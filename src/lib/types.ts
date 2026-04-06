@@ -37,6 +37,20 @@ export type ModelUnloadTimeout = z.infer<typeof ModelUnloadTimeoutSchema>;
 export const PasteMethodSchema = z.enum(["ctrl_v", "direct", "shift_insert"]);
 export type PasteMethod = z.infer<typeof PasteMethodSchema>;
 
+export const WhisperAcceleratorSettingSchema = z.enum(["auto", "cpu", "gpu"]);
+export type WhisperAcceleratorSetting = z.infer<
+  typeof WhisperAcceleratorSettingSchema
+>;
+
+export const OrtAcceleratorSettingSchema = z.enum([
+  "auto",
+  "cpu",
+  "cuda",
+  "directml",
+  "rocm",
+]);
+export type OrtAcceleratorSetting = z.infer<typeof OrtAcceleratorSettingSchema>;
+
 export const ClipboardHandlingSchema = z.enum([
   "dont_modify",
   "copy_to_clipboard",
@@ -128,6 +142,10 @@ export const SettingsSchema = z.object({
   on_recording_end_script: z.string().optional().default(""),
   language_configs: z.array(LanguageConfigSchema).optional().default([]),
   language_cycle_shortcut: z.string().optional().default(""),
+  whisper_accelerator:
+    WhisperAcceleratorSettingSchema.optional().default("auto"),
+  ort_accelerator: OrtAcceleratorSettingSchema.optional().default("auto"),
+  whisper_gpu_device: z.number().optional().default(-1),
 });
 
 export const BindingResponseSchema = z.object({
@@ -174,3 +192,19 @@ export const ModelInfoSchema = z.object({
 });
 
 export type ModelInfo = z.infer<typeof ModelInfoSchema>;
+
+export const GpuDeviceOptionSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  total_vram_mb: z.number(),
+});
+
+export type GpuDeviceOption = z.infer<typeof GpuDeviceOptionSchema>;
+
+export const AvailableAcceleratorsSchema = z.object({
+  whisper: z.array(z.string()),
+  ort: z.array(z.string()),
+  gpu_devices: z.array(GpuDeviceOptionSchema),
+});
+
+export type AvailableAccelerators = z.infer<typeof AvailableAcceleratorsSchema>;
