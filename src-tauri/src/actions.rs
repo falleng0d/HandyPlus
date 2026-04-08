@@ -20,6 +20,7 @@ use tokio::time::timeout;
 
 const TRANSCRIPTION_FIELD: &str = "transcription";
 const TRANSCRIPTION_TIMEOUT_SECS: u64 = 4;
+const POST_PROCESS_TIMEOUT_SECS: u64 = 4;
 
 fn strip_invisible_chars(text: &str) -> String {
     text.replace(['\u{200B}', '\u{200C}', '\u{200D}', '\u{FEFF}'], "")
@@ -292,13 +293,9 @@ impl ShortcutAction for TranscribeAction {
 
         Self::pause_dragon_dictation(get_settings(app));
 
-        #[allow(unused_variables)]
         let ah = app.clone();
-        #[allow(unused_variables)]
         let rm = Arc::clone(&app.state::<Arc<AudioRecordingManager>>());
-        #[allow(unused_variables)]
         let tm = Arc::clone(&app.state::<Arc<TranscriptionManager>>());
-        #[allow(unused_variables)]
         let hm = Arc::clone(&app.state::<Arc<HistoryManager>>());
 
         change_tray_icon(app, TrayIconState::Transcribing);
@@ -348,9 +345,13 @@ impl ShortcutAction for TranscribeAction {
                             let mut post_processed_text: Option<String> = None;
                             let mut post_process_prompt: Option<String> = None;
 
-                            if let Some(processed_text) =
-                                maybe_post_process_transcription(&settings, &transcription).await
-                            {
+                            let post_process_result = timeout(
+                                Duration::from_secs(POST_PROCESS_TIMEOUT_SECS),
+                                maybe_post_process_transcription(&settings, &transcription),
+                            )
+                            .await;
+
+                            if let Ok(Some(processed_text)) = post_process_result {
                                 final_text = processed_text.clone();
                                 post_processed_text = Some(processed_text);
 
@@ -364,6 +365,8 @@ impl ShortcutAction for TranscribeAction {
                                         post_process_prompt = Some(prompt.prompt.clone());
                                     }
                                 }
+                            } else if post_process_result.is_err() {
+                                debug!("Post-processing timed out after {} seconds, using raw transcription", POST_PROCESS_TIMEOUT_SECS);
                             }
 
                             final_text = cleanup_after_transcription(final_text.clone());
@@ -428,6 +431,9 @@ impl ShortcutAction for TranscribeAction {
                             "Transcription timed out after {} seconds",
                             TRANSCRIPTION_TIMEOUT_SECS
                         );
+                        drop(samples_clone);
+                        let tm_for_reload: Arc<TranscriptionManager> = Arc::clone(&tm);
+                        tm_for_reload.initiate_model_load();
                         utils::hide_recording_overlay(&ah);
                         change_tray_icon(&ah, TrayIconState::Idle);
                     }

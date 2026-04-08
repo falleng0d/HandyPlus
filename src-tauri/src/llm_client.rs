@@ -3,8 +3,6 @@ use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE, REFERER, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::time::Duration;
-use tokio::time::timeout;
 
 #[derive(Debug, Serialize, Clone)]
 struct ChatMessage {
@@ -99,8 +97,6 @@ pub async fn send_chat_completion(
     send_chat_completion_with_schema(provider, api_key, model, prompt, None, None).await
 }
 
-const HTTP_TIMEOUT_SECS: u64 = 4;
-
 pub async fn send_chat_completion_with_schema(
     provider: &PostProcessProvider,
     api_key: String,
@@ -149,22 +145,12 @@ pub async fn send_chat_completion_with_schema(
     let url_clone = url.clone();
     let request_body_clone = request_body.clone();
 
-    let send_request = async {
-        client_clone
-            .post(&url_clone)
-            .json(&request_body_clone)
-            .send()
-            .await
-    };
-
-    let response = match timeout(Duration::from_secs(HTTP_TIMEOUT_SECS), send_request).await {
-        Ok(Ok(resp)) => resp,
-        Ok(Err(e)) => return Err(format!("HTTP request failed: {}", e)),
-        Err(_) => {
-            debug!("HTTP request timed out after {} seconds", HTTP_TIMEOUT_SECS);
-            return Err("HTTP request timed out".to_string());
-        }
-    };
+    let response = client_clone
+        .post(&url_clone)
+        .json(&request_body_clone)
+        .send()
+        .await
+        .map_err(|e| format!("HTTP request failed: {}", e))?;
 
     let status = response.status();
     if !status.is_success() {
