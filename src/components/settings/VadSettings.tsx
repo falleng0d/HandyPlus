@@ -3,6 +3,8 @@ import { useSettings } from "../../hooks/useSettings";
 import { Input } from "../ui/Input";
 import { SettingContainer } from "../ui/SettingContainer";
 
+const VAD_FRAME_MS = 30;
+
 interface VadSettingsProps {
   descriptionMode?: "tooltip" | "inline";
   grouped?: boolean;
@@ -18,6 +20,9 @@ export const VadSettings: React.FC<VadSettingsProps> = ({
   const vadPrefillFrames = getSetting("vad_prefill_frames") ?? 15;
   const vadHangoverFrames = getSetting("vad_hangover_frames") ?? 15;
   const vadOnsetFrames = getSetting("vad_onset_frames") ?? 2;
+  const vadPrefillMs = vadPrefillFrames * VAD_FRAME_MS;
+  const vadHangoverMs = vadHangoverFrames * VAD_FRAME_MS;
+  const vadOnsetMs = vadOnsetFrames * VAD_FRAME_MS;
 
   const handleThresholdChange = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -31,34 +36,46 @@ export const VadSettings: React.FC<VadSettingsProps> = ({
   const handlePrefillChange = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    const value = parseInt(event.target.value, 10);
-    if (!isNaN(value) && value >= 0) {
-      await updateSetting("vad_prefill_frames", value);
+    const valueMs = event.target.valueAsNumber;
+    if (
+      !Number.isNaN(valueMs) &&
+      valueMs >= 0 &&
+      valueMs % VAD_FRAME_MS === 0
+    ) {
+      await updateSetting("vad_prefill_frames", valueMs / VAD_FRAME_MS);
     }
   };
 
   const handleHangoverChange = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    const value = parseInt(event.target.value, 10);
-    if (!isNaN(value) && value >= 0) {
-      await updateSetting("vad_hangover_frames", value);
+    const valueMs = event.target.valueAsNumber;
+    if (
+      !Number.isNaN(valueMs) &&
+      valueMs >= 0 &&
+      valueMs % VAD_FRAME_MS === 0
+    ) {
+      await updateSetting("vad_hangover_frames", valueMs / VAD_FRAME_MS);
     }
   };
 
   const handleOnsetChange = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    const value = parseInt(event.target.value, 10);
-    if (!isNaN(value) && value >= 0) {
-      await updateSetting("vad_onset_frames", value);
+    const valueMs = event.target.valueAsNumber;
+    if (
+      !Number.isNaN(valueMs) &&
+      valueMs >= 0 &&
+      valueMs % VAD_FRAME_MS === 0
+    ) {
+      await updateSetting("vad_onset_frames", valueMs / VAD_FRAME_MS);
     }
   };
 
   return (
     <SettingContainer
       title="Voice Activity Detection (VAD)"
-      description="Configure the Silero VAD engine for speech detection. Threshold controls sensitivity, while prefill/hangover/onset frames help filter noise."
+      description="Configure the Silero VAD engine for speech detection. Threshold controls sensitivity, while prefill/hangover/onset milliseconds help filter noise."
       descriptionMode={descriptionMode}
       grouped={grouped}
       layout="stacked"
@@ -81,48 +98,51 @@ export const VadSettings: React.FC<VadSettingsProps> = ({
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-400 w-32">Prefill Frames</span>
+          <span className="text-sm text-gray-400 w-32">Prefill (ms)</span>
           <Input
             type="number"
             min="0"
-            max="100"
-            value={vadPrefillFrames}
+            max="3000"
+            step="30"
+            value={vadPrefillMs}
             onChange={handlePrefillChange}
             disabled={isUpdating("vad_prefill_frames")}
             className="w-24"
           />
           <span className="text-xs text-gray-500">
-            Frames to keep before speech starts
+            Milliseconds of audio to keep before speech starts
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-400 w-32">Hangover Frames</span>
+          <span className="text-sm text-gray-400 w-32">Hangover (ms)</span>
           <Input
             type="number"
             min="0"
-            max="100"
-            value={vadHangoverFrames}
+            max="3000"
+            step="30"
+            value={vadHangoverMs}
             onChange={handleHangoverChange}
             disabled={isUpdating("vad_hangover_frames")}
             className="w-24"
           />
           <span className="text-xs text-gray-500">
-            Frames to keep after speech ends
+            Milliseconds of audio to keep after speech ends
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-400 w-32">Onset Frames</span>
+          <span className="text-sm text-gray-400 w-32">Onset (ms)</span>
           <Input
             type="number"
             min="0"
-            max="100"
-            value={vadOnsetFrames}
+            max="3000"
+            step="30"
+            value={vadOnsetMs}
             onChange={handleOnsetChange}
             disabled={isUpdating("vad_onset_frames")}
             className="w-24"
           />
           <span className="text-xs text-gray-500">
-            Consecutive voice frames needed to detect speech
+            Consecutive milliseconds of voice needed to detect speech
           </span>
         </div>
       </div>
