@@ -13,11 +13,14 @@ use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tauri::AppHandle;
 use tauri::Manager;
+use tokio::time::timeout;
 
 const TRANSCRIPTION_FIELD: &str = "transcription";
+const TRANSCRIPTION_TIMEOUT_SECS: u64 = 4;
+const POST_PROCESS_TIMEOUT_SECS: u64 = 4;
 
 fn strip_invisible_chars(text: &str) -> String {
     text.replace(['\u{200B}', '\u{200C}', '\u{200D}', '\u{FEFF}'], "")
@@ -320,9 +323,17 @@ impl ShortcutAction for TranscribeAction {
                 );
 
                 let transcription_time = Instant::now();
-                let samples_clone = samples.clone(); // Clone for history saving
-                match tm.transcribe(samples) {
-                    Ok(transcription) => {
+                let samples_clone = samples.clone();
+                let tm_clone: Arc<TranscriptionManager> = Arc::clone(&tm);
+
+                let transcription_result = timeout(
+                    Duration::from_secs(TRANSCRIPTION_TIMEOUT_SECS),
+                    tokio::task::spawn_blocking(move || tm_clone.transcribe(samples)),
+                )
+                .await;
+
+                match transcription_result {
+                    Ok(Ok(Ok(transcription))) => {
                         debug!(
                             "Transcription completed in {:?}: '{}'",
                             transcription_time.elapsed(),
@@ -334,9 +345,13 @@ impl ShortcutAction for TranscribeAction {
                             let mut post_processed_text: Option<String> = None;
                             let mut post_process_prompt: Option<String> = None;
 
-                            if let Some(processed_text) =
-                                maybe_post_process_transcription(&settings, &transcription).await
-                            {
+                            let post_process_result = timeout(
+                                Duration::from_secs(POST_PROCESS_TIMEOUT_SECS),
+                                maybe_post_process_transcription(&settings, &transcription),
+                            )
+                            .await;
+
+                            if let Ok(Some(processed_text)) = post_process_result {
                                 final_text = processed_text.clone();
                                 post_processed_text = Some(processed_text);
 
@@ -350,12 +365,14 @@ impl ShortcutAction for TranscribeAction {
                                         post_process_prompt = Some(prompt.prompt.clone());
                                     }
                                 }
+                            } else if post_process_result.is_err() {
+                                debug!("Post-processing timed out after {} seconds, using raw transcription", POST_PROCESS_TIMEOUT_SECS);
                             }
 
                             final_text = cleanup_after_transcription(final_text.clone());
 
                             // Save to history with post-processed text and prompt
-                            let hm_clone = Arc::clone(&hm);
+                            let hm_clone: Arc<HistoryManager> = Arc::clone(&hm);
                             let transcription_for_history = transcription.clone();
                             tauri::async_runtime::spawn(async move {
                                 if let Err(e) = hm_clone
@@ -399,8 +416,24 @@ impl ShortcutAction for TranscribeAction {
                             change_tray_icon(&ah, TrayIconState::Idle);
                         }
                     }
-                    Err(err) => {
-                        debug!("Global Shortcut Transcription error: {}", err);
+                    Ok(Ok(Err(transcribe_err))) => {
+                        debug!("Transcription failed: {}", transcribe_err);
+                        utils::hide_recording_overlay(&ah);
+                        change_tray_icon(&ah, TrayIconState::Idle);
+                    }
+                    Ok(Err(join_err)) => {
+                        debug!("Transcription task join error: {}", join_err);
+                        utils::hide_recording_overlay(&ah);
+                        change_tray_icon(&ah, TrayIconState::Idle);
+                    }
+                    Err(_timeout_err) => {
+                        warn!(
+                            "Transcription timed out after {} seconds",
+                            TRANSCRIPTION_TIMEOUT_SECS
+                        );
+                        drop(samples_clone);
+                        let tm_for_reload: Arc<TranscriptionManager> = Arc::clone(&tm);
+                        tm_for_reload.initiate_model_load();
                         utils::hide_recording_overlay(&ah);
                         change_tray_icon(&ah, TrayIconState::Idle);
                     }

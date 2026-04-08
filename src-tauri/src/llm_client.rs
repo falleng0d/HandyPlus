@@ -4,27 +4,27 @@ use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE, REFER
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 struct ChatMessage {
     role: String,
     content: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 struct JsonSchema {
     name: String,
     strict: bool,
     schema: Value,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 struct ResponseFormat {
     #[serde(rename = "type")]
     format_type: String,
     json_schema: JsonSchema,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 struct ChatCompletionRequest {
     model: String,
     messages: Vec<ChatMessage>,
@@ -141,9 +141,13 @@ pub async fn send_chat_completion_with_schema(
         response_format,
     };
 
-    let response = client
-        .post(&url)
-        .json(&request_body)
+    let client_clone = client.clone();
+    let url_clone = url.clone();
+    let request_body_clone = request_body.clone();
+
+    let response = client_clone
+        .post(&url_clone)
+        .json(&request_body_clone)
         .send()
         .await
         .map_err(|e| format!("HTTP request failed: {}", e))?;
