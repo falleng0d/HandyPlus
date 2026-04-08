@@ -739,6 +739,10 @@ fn cached_gpu_devices() -> &'static [GpuDeviceOption] {
     use transcribe_rs::whisper_cpp::gpu::list_gpu_devices;
 
     GPU_DEVICES.get_or_init(|| {
+        // ggml's Vulkan backend uses FMA3 instructions internally.
+        // On older CPUs without FMA3 (e.g. Sandy Bridge Xeons) this causes
+        // a SIGILL crash that cannot be caught. Skip enumeration entirely
+        // on those CPUs — GPU-accelerated whisper won't work there anyway.
         #[cfg(target_arch = "x86_64")]
         if !std::arch::is_x86_feature_detected!("fma") {
             warn!("CPU lacks FMA3 support — skipping GPU device enumeration");
@@ -783,6 +787,12 @@ pub fn get_available_accelerators() -> AvailableAccelerators {
 
 impl Drop for TranscriptionManager {
     fn drop(&mut self) {
+        // Skip shutdown unless this is the very last clone. TranscriptionManager
+        // is cloned by initiate_model_load() and the watcher thread — those
+        // clones dropping must not kill the watcher. The watcher thread holds
+        // its own clone, so engine's strong_count is always >= 2 while the
+        // watcher is alive. When it reaches 1, only this instance remains
+        // and we can safely shut down.
         if Arc::strong_count(&self.engine) > 1 {
             return;
         }
