@@ -114,6 +114,7 @@ export const SettingsSchema = z.object({
   overlay_position: OverlayPositionSchema,
   debug_mode: z.boolean(),
   custom_words: z.array(z.string()).optional().default([]),
+  custom_word_correction_enabled: z.boolean().optional().default(true),
   model_unload_timeout: ModelUnloadTimeoutSchema.optional().default("never"),
   word_correction_threshold: z.number().optional().default(0.18),
   history_limit: z.number().optional().default(5),

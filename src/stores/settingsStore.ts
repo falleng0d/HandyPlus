@@ -73,6 +73,7 @@ const DEFAULT_SETTINGS: Partial<Settings> = {
   overlay_position: "bottom",
   debug_mode: false,
   custom_words: [],
+  custom_word_correction_enabled: true,
   history_limit: 5,
   vad_threshold: 0.3,
   vad_prefill_frames: 15,
@@ -127,6 +128,8 @@ const settingUpdaters: {
   debug_mode: (value) =>
     invoke("change_debug_mode_setting", { enabled: value }),
   custom_words: (value) => invoke("update_custom_words", { words: value }),
+  custom_word_correction_enabled: (value) =>
+    invoke("change_custom_word_correction_enabled_setting", { enabled: value }),
   word_correction_threshold: (value) =>
     invoke("change_word_correction_threshold_setting", { threshold: value }),
   vad_threshold: (value) =>

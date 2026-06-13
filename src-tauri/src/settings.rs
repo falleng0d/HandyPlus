@@ -223,6 +223,8 @@ pub struct AppSettings {
     pub debug_mode: bool,
     #[serde(default)]
     pub custom_words: Vec<String>,
+    #[serde(default = "default_custom_word_correction_enabled")]
+    pub custom_word_correction_enabled: bool,
     #[serde(default)]
     pub model_unload_timeout: ModelUnloadTimeout,
     #[serde(default = "default_word_correction_threshold")]
@@ -318,6 +320,10 @@ fn default_debug_mode() -> bool {
 
 fn default_word_correction_threshold() -> f64 {
     0.18
+}
+
+fn default_custom_word_correction_enabled() -> bool {
+    true
 }
 
 fn default_history_limit() -> usize {
@@ -588,6 +594,7 @@ pub fn get_default_settings() -> AppSettings {
         overlay_position: OverlayPosition::Bottom,
         debug_mode: false,
         custom_words: Vec::new(),
+        custom_word_correction_enabled: default_custom_word_correction_enabled(),
         model_unload_timeout: ModelUnloadTimeout::Never,
         word_correction_threshold: default_word_correction_threshold(),
         history_limit: default_history_limit(),

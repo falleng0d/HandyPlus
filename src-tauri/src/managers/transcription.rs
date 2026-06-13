@@ -652,7 +652,10 @@ impl TranscriptionManager {
             .map(|info| matches!(info.engine_type, EngineType::Whisper))
             .unwrap_or(false);
 
-        let corrected_result = if !settings.custom_words.is_empty() && !is_whisper {
+        let corrected_result = if settings.custom_word_correction_enabled
+            && !settings.custom_words.is_empty()
+            && !is_whisper
+        {
             apply_custom_words(
                 &result.text,
                 &settings.custom_words,

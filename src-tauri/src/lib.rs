@@ -252,6 +252,7 @@ pub fn run() {
             command::change_selected_language_setting,
             command::change_overlay_position_setting,
             command::change_debug_mode_setting,
+            command::change_custom_word_correction_enabled_setting,
             command::change_word_correction_threshold_setting,
             command::change_paste_method_setting,
             command::change_clipboard_handling_setting,

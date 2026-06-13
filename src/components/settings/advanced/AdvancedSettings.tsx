@@ -11,6 +11,7 @@ import { ClipboardHandlingSetting } from "../ClipboardHandling";
 import { TypingInterval } from "../TypingInterval";
 import { VadSettings } from "../VadSettings";
 import { AccelerationSelector } from "../AccelerationSelector";
+import { CustomWordCorrectionToggle } from "../CustomWordCorrectionToggle";
 
 export const AdvancedSettings: React.FC = () => {
   return (
@@ -26,6 +27,7 @@ export const AdvancedSettings: React.FC = () => {
         <ModelUnloadTimeoutSetting descriptionMode="tooltip" grouped={true} />
         <VadSettings descriptionMode="tooltip" grouped={true} />
         <AccelerationSelector descriptionMode="tooltip" grouped={true} />
+        <CustomWordCorrectionToggle descriptionMode="tooltip" grouped />
         <CustomWords descriptionMode="tooltip" grouped />
       </SettingsGroup>
     </div>
