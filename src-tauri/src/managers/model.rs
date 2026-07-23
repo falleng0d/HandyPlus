@@ -21,7 +21,6 @@ pub enum EngineType {
     Whisper,
     Parakeet,
     Moonshine,
-    MoonshineStreaming,
     SenseVoice,
     GigaAM,
     Canary,
@@ -378,93 +377,6 @@ impl ModelManager {
         );
 
         available_models.insert(
-            "moonshine-tiny-streaming-en".to_string(),
-            ModelInfo {
-                id: "moonshine-tiny-streaming-en".to_string(),
-                name: "Moonshine V2 Tiny".to_string(),
-                description: "Ultra-fast, English only".to_string(),
-                filename: "moonshine-tiny-streaming-en".to_string(),
-                url: Some(
-                    "https://blob.handy.computer/moonshine-tiny-streaming-en.tar.gz".to_string(),
-                ),
-                sha256: Some(
-                    "465addcfca9e86117415677dfdc98b21edc53537210333a3ecdb58509a80abaf".to_string(),
-                ),
-                size_mb: 31,
-                is_downloaded: false,
-                is_downloading: false,
-                partial_size: 0,
-                is_directory: true,
-                engine_type: EngineType::MoonshineStreaming,
-                accuracy_score: 0.55,
-                speed_score: 0.95,
-                supports_translation: false,
-                is_recommended: false,
-                supported_languages: vec!["en".to_string()],
-                supports_language_selection: false,
-                is_custom: false,
-            },
-        );
-
-        available_models.insert(
-            "moonshine-small-streaming-en".to_string(),
-            ModelInfo {
-                id: "moonshine-small-streaming-en".to_string(),
-                name: "Moonshine V2 Small".to_string(),
-                description: "Fast, English only. Good balance of speed and accuracy.".to_string(),
-                filename: "moonshine-small-streaming-en".to_string(),
-                url: Some(
-                    "https://blob.handy.computer/moonshine-small-streaming-en.tar.gz".to_string(),
-                ),
-                sha256: Some(
-                    "dbb3e1c1832bd88a4ac712f7449a136cc2c9a18c5fe33a12ed1b7cb1cfe9cdd5".to_string(),
-                ),
-                size_mb: 99,
-                is_downloaded: false,
-                is_downloading: false,
-                partial_size: 0,
-                is_directory: true,
-                engine_type: EngineType::MoonshineStreaming,
-                accuracy_score: 0.65,
-                speed_score: 0.90,
-                supports_translation: false,
-                is_recommended: false,
-                supported_languages: vec!["en".to_string()],
-                supports_language_selection: false,
-                is_custom: false,
-            },
-        );
-
-        available_models.insert(
-            "moonshine-medium-streaming-en".to_string(),
-            ModelInfo {
-                id: "moonshine-medium-streaming-en".to_string(),
-                name: "Moonshine V2 Medium".to_string(),
-                description: "English only. High quality.".to_string(),
-                filename: "moonshine-medium-streaming-en".to_string(),
-                url: Some(
-                    "https://blob.handy.computer/moonshine-medium-streaming-en.tar.gz".to_string(),
-                ),
-                sha256: Some(
-                    "07a66f3bff1c77e75a2f637e5a263928a08baae3c29c4c053fc968a9a9373d13".to_string(),
-                ),
-                size_mb: 192,
-                is_downloaded: false,
-                is_downloading: false,
-                partial_size: 0,
-                is_directory: true,
-                engine_type: EngineType::MoonshineStreaming,
-                accuracy_score: 0.75,
-                speed_score: 0.80,
-                supports_translation: false,
-                is_recommended: false,
-                supported_languages: vec!["en".to_string()],
-                supports_language_selection: false,
-                is_custom: false,
-            },
-        );
-
-        available_models.insert(
             "sense-voice-int8".to_string(),
             ModelInfo {
                 id: "sense-voice-int8".to_string(),
@@ -602,6 +514,8 @@ impl ModelManager {
             },
         );
 
+        Self::discover_custom_transcribe_models(&models_dir, &mut available_models)?;
+
         let manager = Self {
             app_handle: app_handle.clone(),
             models_dir,
@@ -630,6 +544,79 @@ impl ModelManager {
     pub fn get_model_info(&self, model_id: &str) -> Option<ModelInfo> {
         let models = self.available_models.lock().unwrap();
         models.get(model_id).cloned()
+    }
+
+    /// Discover user-provided legacy GGML (`.bin`) and GGUF files. Both formats
+    /// are architecture-detected and loaded by transcribe-cpp.
+    fn discover_custom_transcribe_models(
+        models_dir: &Path,
+        available_models: &mut HashMap<String, ModelInfo>,
+    ) -> Result<()> {
+        let predefined: HashSet<String> = available_models
+            .values()
+            .filter(|model| !model.is_directory)
+            .map(|model| model.filename.clone())
+            .collect();
+
+        for entry in fs::read_dir(models_dir)?.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if filename.starts_with('.') || predefined.contains(filename) {
+                continue;
+            }
+            let Some(id) = transcribe_model_id(filename) else {
+                continue;
+            };
+            if available_models.contains_key(id) {
+                continue;
+            }
+
+            let display_name = id
+                .replace(['-', '_'], " ")
+                .split_whitespace()
+                .map(|word| {
+                    let mut chars = word.chars();
+                    chars
+                        .next()
+                        .map(|first| first.to_uppercase().collect::<String>() + chars.as_str())
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+            available_models.insert(
+                id.to_string(),
+                ModelInfo {
+                    id: id.to_string(),
+                    name: display_name,
+                    description: "User-provided GGML/GGUF model".to_string(),
+                    filename: filename.to_string(),
+                    url: None,
+                    sha256: None,
+                    size_mb: path
+                        .metadata()
+                        .map(|metadata| metadata.len() / 1_048_576)
+                        .unwrap_or(0),
+                    is_downloaded: true,
+                    is_downloading: false,
+                    partial_size: 0,
+                    is_directory: false,
+                    engine_type: EngineType::Whisper,
+                    accuracy_score: 0.0,
+                    speed_score: 0.0,
+                    supports_translation: false,
+                    is_recommended: false,
+                    supported_languages: Vec::new(),
+                    supports_language_selection: true,
+                    is_custom: true,
+                },
+            );
+        }
+        Ok(())
     }
 
     fn migrate_bundled_models(&self) -> Result<()> {
@@ -1219,5 +1206,24 @@ impl ModelManager {
 
         info!("Download cancellation requested for: {}", model_id);
         Ok(())
+    }
+}
+
+fn transcribe_model_id(filename: &str) -> Option<&str> {
+    filename
+        .strip_suffix(".bin")
+        .or_else(|| filename.strip_suffix(".gguf"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::transcribe_model_id;
+
+    #[test]
+    fn only_complete_ggml_and_gguf_files_are_models() {
+        assert_eq!(transcribe_model_id("custom.bin"), Some("custom"));
+        assert_eq!(transcribe_model_id("custom.gguf"), Some("custom"));
+        assert_eq!(transcribe_model_id("custom.gguf.partial"), None);
+        assert_eq!(transcribe_model_id("notes.txt"), None);
     }
 }

@@ -56,14 +56,24 @@
       "entitlements": "Entitlements.plist"
     },
     "linux": {
+      "deb": {
+        "files": {
+          "/usr/lib/Handy": "transcribe-libs"
+        }
+      },
       "rpm": {
         "compression": {
           "type": "none"
+        },
+        "files": {
+          "/usr/lib/Handy": "transcribe-libs"
         }
       },
       "appimage": {
         "bundleMediaFramework": true,
-        "files": {}
+        "files": {
+          "/usr/lib": "transcribe-libs"
+        }
       }
     },
     "windows": {

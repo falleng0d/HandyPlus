@@ -13,17 +13,20 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock};
 use std::thread;
 use std::time::{Duration, SystemTime};
 use tauri::{AppHandle, Emitter, Manager};
+use transcribe_cpp::{
+    Backend, Feature, Model, ModelOptions, RunExtension, RunOptions, Session, Task,
+    WhisperRunOptions,
+};
 use transcribe_rs::{
     onnx::{
         canary::CanaryModel,
         cohere::CohereModel,
         gigaam::GigaAMModel,
-        moonshine::{MoonshineModel, MoonshineVariant, StreamingModel},
+        moonshine::{MoonshineModel, MoonshineVariant},
         parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity},
         sense_voice::{SenseVoiceModel, SenseVoiceParams},
         Quantization,
     },
-    whisper_cpp::{WhisperEngine, WhisperInferenceParams},
     SpeechModel, TranscribeOptions,
 };
 
@@ -36,10 +39,9 @@ pub struct ModelStateEvent {
 }
 
 enum LoadedEngine {
-    Whisper(WhisperEngine),
+    TranscribeCpp(Session),
     Parakeet(ParakeetModel),
     Moonshine(MoonshineModel),
-    MoonshineStreaming(StreamingModel),
     SenseVoice(SenseVoiceModel),
     GigaAM(GigaAMModel),
     Canary(CanaryModel),
@@ -285,12 +287,36 @@ impl TranscriptionManager {
 
         let loaded_engine = match model_info.engine_type {
             EngineType::Whisper => {
-                let engine = WhisperEngine::load(&model_path).map_err(|e| {
+                let settings = get_settings(&self.app_handle);
+                let backend = select_transcribe_backend(settings.whisper_accelerator);
+                let gpu_device =
+                    resolve_gpu_device(settings.whisper_accelerator, settings.whisper_gpu_device);
+                let model = Model::load_with(
+                    &model_path,
+                    &ModelOptions {
+                        backend,
+                        gpu_device,
+                    },
+                )
+                .map_err(|e| {
                     let error_msg = format!("Failed to load whisper model {}: {}", model_id, e);
                     emit_loading_failed(&error_msg);
                     anyhow::anyhow!(error_msg)
                 })?;
-                LoadedEngine::Whisper(engine)
+                let bound_backend = model.backend();
+                let session = model.session().map_err(|e| {
+                    let error_msg = format!(
+                        "Failed to create transcription session for {}: {}",
+                        model_id, e
+                    );
+                    emit_loading_failed(&error_msg);
+                    anyhow::anyhow!(error_msg)
+                })?;
+                info!(
+                    "Loaded transcribe-cpp model '{}' (requested {:?}, gpu_device {}, bound backend '{}')",
+                    model_id, backend, gpu_device, bound_backend
+                );
+                LoadedEngine::TranscribeCpp(session)
             }
             EngineType::Parakeet => {
                 let engine =
@@ -314,18 +340,6 @@ impl TranscriptionManager {
                     anyhow::anyhow!(error_msg)
                 })?;
                 LoadedEngine::Moonshine(engine)
-            }
-            EngineType::MoonshineStreaming => {
-                let engine = StreamingModel::load(&model_path, 0, &Quantization::default())
-                    .map_err(|e| {
-                        let error_msg = format!(
-                            "Failed to load moonshine streaming model {}: {}",
-                            model_id, e
-                        );
-                        emit_loading_failed(&error_msg);
-                        anyhow::anyhow!(error_msg)
-                    })?;
-                LoadedEngine::MoonshineStreaming(engine)
             }
             EngineType::SenseVoice => {
                 let engine =
@@ -477,6 +491,7 @@ impl TranscriptionManager {
         };
 
         // Run engine inference without holding the mutex so a panic cannot poison it.
+        let custom_words_already_prompted;
         let result = {
             let mut engine_guard = self.lock_engine();
             let mut engine = match engine_guard.take() {
@@ -489,36 +504,62 @@ impl TranscriptionManager {
             };
             drop(engine_guard);
 
+            let (model_is_whisper, supports_initial_prompt, supports_translate, languages) =
+                match &engine {
+                    LoadedEngine::TranscribeCpp(session) => {
+                        let model = session.model();
+                        let caps = model.capabilities();
+                        (
+                            model.arch() == "whisper",
+                            model.supports(Feature::InitialPrompt),
+                            caps.supports_translate,
+                            caps.languages,
+                        )
+                    }
+                    _ => (false, false, false, Vec::new()),
+                };
+            custom_words_already_prompted = settings.custom_word_correction_enabled
+                && !settings.custom_words.is_empty()
+                && model_is_whisper
+                && supports_initial_prompt;
+
             let transcribe_result = catch_unwind(AssertUnwindSafe(|| -> Result<_> {
                 match &mut engine {
-                    LoadedEngine::Whisper(whisper_engine) => {
-                        let whisper_language = if validated_language == "auto" {
+                    LoadedEngine::TranscribeCpp(session) => {
+                        let language = if validated_language == "auto" {
                             None
                         } else {
-                            let normalized = if validated_language == "zh-Hans"
-                                || validated_language == "zh-Hant"
-                            {
-                                "zh".to_string()
-                            } else {
-                                validated_language.clone()
-                            };
-                            Some(normalized)
+                            let normalized = normalize_language(&validated_language).to_string();
+                            languages.contains(&normalized).then_some(normalized)
                         };
-
-                        let params = WhisperInferenceParams {
-                            language: whisper_language,
-                            translate: settings.translate_to_english,
-                            initial_prompt: if settings.custom_words.is_empty() {
-                                None
+                        let translate = settings.translate_to_english
+                            && supports_translate
+                            && language.as_deref() != Some("en");
+                        let family = if custom_words_already_prompted {
+                            Some(RunExtension::Whisper(WhisperRunOptions {
+                                initial_prompt: Some(settings.custom_words.join(", ")),
+                                ..Default::default()
+                            }))
+                        } else {
+                            None
+                        };
+                        let options = RunOptions {
+                            task: if translate {
+                                Task::Translate
                             } else {
-                                Some(settings.custom_words.join(", "))
+                                Task::Transcribe
                             },
+                            language,
+                            target_language: translate.then(|| "en".to_string()),
+                            family,
                             ..Default::default()
                         };
-
-                        whisper_engine
-                            .transcribe_with(&audio, &params)
-                            .map_err(|e| anyhow::anyhow!("Whisper transcription failed: {}", e))
+                        session
+                            .run(&audio, &options)
+                            .map(|result| result.text)
+                            .map_err(|e| {
+                                anyhow::anyhow!("transcribe-cpp transcription failed: {}", e)
+                            })
                     }
                     LoadedEngine::Parakeet(parakeet_engine) => {
                         let params = ParakeetParams {
@@ -527,18 +568,13 @@ impl TranscriptionManager {
                         };
                         parakeet_engine
                             .transcribe_with(&audio, &params)
+                            .map(|result| result.text)
                             .map_err(|e| anyhow::anyhow!("Parakeet transcription failed: {}", e))
                     }
                     LoadedEngine::Moonshine(moonshine_engine) => moonshine_engine
                         .transcribe(&audio, &TranscribeOptions::default())
+                        .map(|result| result.text)
                         .map_err(|e| anyhow::anyhow!("Moonshine transcription failed: {}", e)),
-                    LoadedEngine::MoonshineStreaming(moonshine_streaming_engine) => {
-                        moonshine_streaming_engine
-                            .transcribe(&audio, &TranscribeOptions::default())
-                            .map_err(|e| {
-                                anyhow::anyhow!("MoonshineStreaming transcription failed: {}", e)
-                            })
-                    }
                     LoadedEngine::SenseVoice(sensevoice_engine) => {
                         let normalized = match validated_language.as_str() {
                             "zh-Hans" | "zh-Hant" => Some("zh".to_string()),
@@ -556,10 +592,12 @@ impl TranscriptionManager {
 
                         sensevoice_engine
                             .transcribe_with(&audio, &params)
+                            .map(|result| result.text)
                             .map_err(|e| anyhow::anyhow!("SenseVoice transcription failed: {}", e))
                     }
                     LoadedEngine::GigaAM(gigaam_engine) => gigaam_engine
                         .transcribe(&audio, &TranscribeOptions::default())
+                        .map(|result| result.text)
                         .map_err(|e| anyhow::anyhow!("GigaAM transcription failed: {}", e)),
                     LoadedEngine::Canary(canary_engine) => {
                         let language = if validated_language == "auto" {
@@ -579,6 +617,7 @@ impl TranscriptionManager {
 
                         canary_engine
                             .transcribe(&audio, &options)
+                            .map(|result| result.text)
                             .map_err(|e| anyhow::anyhow!("Canary transcription failed: {}", e))
                     }
                     LoadedEngine::Cohere(cohere_engine) => {
@@ -598,6 +637,7 @@ impl TranscriptionManager {
 
                         cohere_engine
                             .transcribe(&audio, &options)
+                            .map(|result| result.text)
                             .map_err(|e| anyhow::anyhow!("Cohere transcription failed: {}", e))
                     }
                 }
@@ -646,23 +686,17 @@ impl TranscriptionManager {
             }
         };
 
-        let is_whisper = self
-            .model_manager
-            .get_model_info(&settings.selected_model)
-            .map(|info| matches!(info.engine_type, EngineType::Whisper))
-            .unwrap_or(false);
-
         let corrected_result = if settings.custom_word_correction_enabled
             && !settings.custom_words.is_empty()
-            && !is_whisper
+            && !custom_words_already_prompted
         {
             apply_custom_words(
-                &result.text,
+                &result,
                 &settings.custom_words,
                 settings.word_correction_threshold,
             )
         } else {
-            result.text
+            result
         };
 
         // Filter out filler words and hallucinations
@@ -694,39 +728,83 @@ impl TranscriptionManager {
     }
 }
 
-/// Apply the user's accelerator preferences to the transcribe-rs global atomics.
-/// Called on startup and whenever the user changes the setting.
+fn normalize_language(language: &str) -> &str {
+    match language {
+        "zh-Hans" | "zh-Hant" => "zh",
+        other => other,
+    }
+}
+
+/// Initialize transcribe-cpp logging and dynamic compute backends once, before
+/// any model is loaded.
+pub fn init_transcribe_backend() {
+    transcribe_cpp::init_logging();
+    match transcribe_cpp::init_backends_default() {
+        Ok(()) => info!(
+            "transcribe-cpp initialized with {} compute device(s)",
+            transcribe_cpp::devices().len()
+        ),
+        Err(error) => warn!("Failed to initialize transcribe-cpp backends: {}", error),
+    }
+}
+
+fn select_transcribe_backend(setting: WhisperAcceleratorSetting) -> Backend {
+    match setting {
+        WhisperAcceleratorSetting::Auto => Backend::Auto,
+        WhisperAcceleratorSetting::Cpu => Backend::Cpu,
+        WhisperAcceleratorSetting::Gpu => {
+            #[cfg(target_os = "macos")]
+            let candidates = [Backend::Metal];
+            #[cfg(not(target_os = "macos"))]
+            let candidates = [Backend::Cuda, Backend::Vulkan];
+
+            candidates
+                .into_iter()
+                .find(|backend| transcribe_cpp::backend_available(*backend))
+                .unwrap_or_else(|| {
+                    warn!("No transcribe-cpp GPU backend available; falling back to Auto");
+                    Backend::Auto
+                })
+        }
+    }
+}
+
+fn is_gpu_device(device: &transcribe_cpp::Device) -> bool {
+    device.kind != "cpu" && device.kind != "accel"
+}
+
+fn resolve_gpu_device(setting: WhisperAcceleratorSetting, gpu_device: i32) -> i32 {
+    if setting != WhisperAcceleratorSetting::Gpu || gpu_device <= 0 {
+        return 0;
+    }
+    if transcribe_cpp::devices()
+        .iter()
+        .any(|device| device.index == Some(gpu_device as usize) && is_gpu_device(device))
+    {
+        gpu_device
+    } else {
+        warn!(
+            "Stored transcribe-cpp GPU device {} is unavailable; using auto",
+            gpu_device
+        );
+        0
+    }
+}
+
+/// Apply ONNX settings. This build intentionally ships CPU-only ONNX Runtime;
+/// Whisper-family acceleration is selected per model through transcribe-cpp.
 pub fn apply_accelerator_settings(app: &tauri::AppHandle) {
     use transcribe_rs::accel;
 
     let settings = get_settings(app);
-
-    let whisper_pref = match settings.whisper_accelerator {
-        WhisperAcceleratorSetting::Auto => accel::WhisperAccelerator::Auto,
-        WhisperAcceleratorSetting::Cpu => accel::WhisperAccelerator::CpuOnly,
-        WhisperAcceleratorSetting::Gpu => accel::WhisperAccelerator::Gpu,
-    };
-    accel::set_whisper_accelerator(whisper_pref);
-    accel::set_whisper_gpu_device(settings.whisper_gpu_device);
     info!(
-        "Whisper accelerator set to: {}, gpu_device: {}",
-        whisper_pref,
-        if settings.whisper_gpu_device == accel::GPU_DEVICE_AUTO {
-            "auto".to_string()
-        } else {
-            settings.whisper_gpu_device.to_string()
-        }
+        "transcribe-cpp accelerator preference: {:?}, gpu_device: {} (applied on model load)",
+        settings.whisper_accelerator, settings.whisper_gpu_device
     );
-
-    let ort_pref = match settings.ort_accelerator {
-        OrtAcceleratorSetting::Auto => accel::OrtAccelerator::Auto,
-        OrtAcceleratorSetting::Cpu => accel::OrtAccelerator::CpuOnly,
-        OrtAcceleratorSetting::Cuda => accel::OrtAccelerator::Cuda,
-        OrtAcceleratorSetting::DirectMl => accel::OrtAccelerator::DirectMl,
-        OrtAcceleratorSetting::Rocm => accel::OrtAccelerator::Rocm,
-    };
-    accel::set_ort_accelerator(ort_pref);
-    info!("ORT accelerator set to: {}", ort_pref);
+    if settings.ort_accelerator != OrtAcceleratorSetting::Cpu {
+        debug!("ONNX accelerator preference is ignored by this CPU-only build");
+    }
+    accel::set_ort_accelerator(accel::OrtAccelerator::CpuOnly);
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -739,25 +817,18 @@ pub struct GpuDeviceOption {
 static GPU_DEVICES: OnceLock<Vec<GpuDeviceOption>> = OnceLock::new();
 
 fn cached_gpu_devices() -> &'static [GpuDeviceOption] {
-    use transcribe_rs::whisper_cpp::gpu::list_gpu_devices;
-
     GPU_DEVICES.get_or_init(|| {
-        // ggml's Vulkan backend uses FMA3 instructions internally.
-        // On older CPUs without FMA3 (e.g. Sandy Bridge Xeons) this causes
-        // a SIGILL crash that cannot be caught. Skip enumeration entirely
-        // on those CPUs — GPU-accelerated whisper won't work there anyway.
-        #[cfg(target_arch = "x86_64")]
-        if !std::arch::is_x86_feature_detected!("fma") {
-            warn!("CPU lacks FMA3 support — skipping GPU device enumeration");
-            return Vec::new();
-        }
-
-        list_gpu_devices()
+        transcribe_cpp::devices()
             .into_iter()
+            .filter(is_gpu_device)
             .map(|d| GpuDeviceOption {
-                id: d.id,
-                name: d.name,
-                total_vram_mb: d.total_vram / (1024 * 1024),
+                id: d.index.unwrap_or(0) as i32,
+                name: if d.description.is_empty() {
+                    d.name
+                } else {
+                    d.description
+                },
+                total_vram_mb: (d.memory_total / (1024 * 1024)) as usize,
             })
             .collect()
     })
@@ -772,18 +843,11 @@ pub struct AvailableAccelerators {
 
 /// Return which accelerators are compiled into this build.
 pub fn get_available_accelerators() -> AvailableAccelerators {
-    use transcribe_rs::accel::OrtAccelerator;
-
-    let ort_options: Vec<String> = OrtAccelerator::available()
-        .into_iter()
-        .map(|a| a.to_string())
-        .collect();
-
     let whisper_options = vec!["auto".to_string(), "cpu".to_string(), "gpu".to_string()];
 
     AvailableAccelerators {
         whisper: whisper_options,
-        ort: ort_options,
+        ort: vec!["cpu".to_string()],
         gpu_devices: cached_gpu_devices().to_vec(),
     }
 }

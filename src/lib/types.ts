@@ -177,7 +177,6 @@ export const ModelInfoSchema = z.object({
     "Whisper",
     "Parakeet",
     "Moonshine",
-    "MoonshineStreaming",
     "SenseVoice",
     "GigaAM",
     "Canary",

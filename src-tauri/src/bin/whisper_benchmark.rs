@@ -4,11 +4,9 @@ use hound::{SampleFormat, WavReader, WavSpec};
 use rubato::{FftFixedIn, Resampler};
 use std::path::PathBuf;
 use std::time::Instant;
-use transcribe_rs::accel::{
-    set_ort_accelerator, set_whisper_accelerator, set_whisper_gpu_device, OrtAccelerator,
-    WhisperAccelerator,
+use transcribe_cpp::{
+    Backend, Model, ModelOptions, RunExtension, RunOptions, Task, WhisperRunOptions,
 };
-use transcribe_rs::whisper_cpp::{WhisperEngine, WhisperInferenceParams};
 
 const WHISPER_SAMPLE_RATE: u32 = 16000;
 
@@ -180,33 +178,38 @@ fn validate_model_path(path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn apply_accelerator_settings(whisper_accel: &WhisperArg, ort_accel: &OrtArg, gpu_device: i32) {
-    let whisper = match whisper_accel {
-        WhisperArg::Auto => WhisperAccelerator::Auto,
-        WhisperArg::Cpu => WhisperAccelerator::CpuOnly,
-        WhisperArg::GPU => WhisperAccelerator::Gpu,
+fn model_options(whisper_accel: &WhisperArg, ort_accel: &OrtArg, gpu_device: i32) -> ModelOptions {
+    let backend = match whisper_accel {
+        WhisperArg::Auto => Backend::Auto,
+        WhisperArg::Cpu => Backend::Cpu,
+        WhisperArg::GPU => {
+            #[cfg(target_os = "macos")]
+            let candidates = [Backend::Metal];
+            #[cfg(not(target_os = "macos"))]
+            let candidates = [Backend::Cuda, Backend::Vulkan];
+            candidates
+                .into_iter()
+                .find(|backend| transcribe_cpp::backend_available(*backend))
+                .unwrap_or(Backend::Auto)
+        }
     };
-    set_whisper_accelerator(whisper);
-    set_whisper_gpu_device(gpu_device);
     println!(
-        "Whisper accelerator: {:?}, gpu_device: {}",
-        whisper,
+        "transcribe-cpp accelerator: {:?}, gpu_device: {}",
+        backend,
         if gpu_device == -1 {
             "auto".to_string()
         } else {
             gpu_device.to_string()
         }
     );
-
-    let ort = match ort_accel {
-        OrtArg::Auto => OrtAccelerator::Auto,
-        OrtArg::Cpu => OrtAccelerator::CpuOnly,
-        OrtArg::Cuda => OrtAccelerator::Cuda,
-        OrtArg::DirectMl => OrtAccelerator::DirectMl,
-        OrtArg::Rocm => OrtAccelerator::Rocm,
-    };
-    set_ort_accelerator(ort);
-    println!("ORT accelerator: {:?}", ort);
+    println!(
+        "ONNX accelerator argument {:?} is unused by this Whisper benchmark",
+        ort_accel
+    );
+    ModelOptions {
+        backend,
+        gpu_device: gpu_device.max(0),
+    }
 }
 
 fn main() -> Result<()> {
@@ -224,14 +227,16 @@ fn main() -> Result<()> {
     let (audio_16k, sample_rate) = load_audio(&args.audio)?;
     let audio_duration_sec = audio_16k.len() as f64 / sample_rate as f64;
 
-    // Apply accelerator settings
-    apply_accelerator_settings(&args.whisper_accel, &args.ort_accel, args.gpu_device);
+    transcribe_cpp::init_logging();
+    transcribe_cpp::init_backends_default()?;
+    let model_options = model_options(&args.whisper_accel, &args.ort_accel, args.gpu_device);
     println!("");
 
     // Load model
     println!("Loading model...");
     let load_start = Instant::now();
-    let mut engine = WhisperEngine::load(&args.model)?;
+    let model = Model::load_with(&args.model, &model_options)?;
+    let mut engine = model.session()?;
     let load_time = load_start.elapsed();
     println!("Model loaded in {:.2}s", load_time.as_secs_f64());
     println!("");
@@ -243,10 +248,20 @@ fn main() -> Result<()> {
         Some(args.language.clone())
     };
 
-    let params = WhisperInferenceParams {
+    let params = RunOptions {
         language,
-        translate: args.translate,
-        initial_prompt: args.prompt.clone(),
+        task: if args.translate {
+            Task::Translate
+        } else {
+            Task::Transcribe
+        },
+        target_language: args.translate.then(|| "en".to_string()),
+        family: args.prompt.clone().map(|initial_prompt| {
+            RunExtension::Whisper(WhisperRunOptions {
+                initial_prompt: Some(initial_prompt),
+                ..Default::default()
+            })
+        }),
         ..Default::default()
     };
 
@@ -261,7 +276,7 @@ fn main() -> Result<()> {
     // Warmup run
     if args.warmup {
         println!("--- Warmup run ---");
-        let _ = engine.transcribe_with(&audio_16k, &params)?;
+        let _ = engine.run(&audio_16k, &params)?;
         println!("Warmup complete\n");
     }
 
@@ -272,7 +287,7 @@ fn main() -> Result<()> {
     for i in 1..=args.iterations {
         println!("--- Run {}/{} ---", i, args.iterations);
         let start = Instant::now();
-        let result = engine.transcribe_with(&audio_16k, &params)?;
+        let result = engine.run(&audio_16k, &params)?;
         let elapsed = start.elapsed();
         let elapsed_ms = elapsed.as_millis() as u64;
 
