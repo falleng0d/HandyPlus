@@ -514,6 +514,12 @@ impl ModelManager {
             },
         );
 
+        // Add the bundled non-streaming GGUF catalog. Catalog IDs include the
+        // repository and filename, so these remain distinct from legacy models.
+        for model in crate::catalog::models() {
+            available_models.entry(model.id.clone()).or_insert(model);
+        }
+
         Self::discover_custom_transcribe_models(&models_dir, &mut available_models)?;
 
         let manager = Self {

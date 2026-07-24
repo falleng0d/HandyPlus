@@ -1,6 +1,7 @@
 mod actions;
 mod audio_feedback;
 pub mod audio_toolkit;
+mod catalog;
 mod clipboard;
 mod command;
 mod commands;
