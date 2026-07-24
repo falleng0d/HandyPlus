@@ -791,20 +791,23 @@ fn resolve_gpu_device(setting: WhisperAcceleratorSetting, gpu_device: i32) -> i3
     }
 }
 
-/// Apply ONNX settings. This build intentionally ships CPU-only ONNX Runtime;
-/// Whisper-family acceleration is selected per model through transcribe-cpp.
+/// Apply the configured ONNX Runtime accelerator before any model is loaded.
 pub fn apply_accelerator_settings(app: &tauri::AppHandle) {
     use transcribe_rs::accel;
 
     let settings = get_settings(app);
     info!(
-        "transcribe-cpp accelerator preference: {:?}, gpu_device: {} (applied on model load)",
-        settings.whisper_accelerator, settings.whisper_gpu_device
+        "accelerator preferences: whisper={:?}, ort={:?}, gpu_device={} (applied on model load)",
+        settings.whisper_accelerator, settings.ort_accelerator, settings.whisper_gpu_device
     );
-    if settings.ort_accelerator != OrtAcceleratorSetting::Cpu {
-        debug!("ONNX accelerator preference is ignored by this CPU-only build");
-    }
-    accel::set_ort_accelerator(accel::OrtAccelerator::CpuOnly);
+    let ort_accelerator = match settings.ort_accelerator {
+        OrtAcceleratorSetting::Auto => accel::OrtAccelerator::Auto,
+        OrtAcceleratorSetting::Cpu => accel::OrtAccelerator::CpuOnly,
+        OrtAcceleratorSetting::Cuda => accel::OrtAccelerator::Cuda,
+        OrtAcceleratorSetting::DirectMl => accel::OrtAccelerator::DirectMl,
+        OrtAcceleratorSetting::Rocm => accel::OrtAccelerator::Rocm,
+    };
+    accel::set_ort_accelerator(ort_accelerator);
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -847,7 +850,7 @@ pub fn get_available_accelerators() -> AvailableAccelerators {
 
     AvailableAccelerators {
         whisper: whisper_options,
-        ort: vec!["cpu".to_string()],
+        ort: vec!["auto".to_string(), "cpu".to_string(), "cuda".to_string()],
         gpu_devices: cached_gpu_devices().to_vec(),
     }
 }
