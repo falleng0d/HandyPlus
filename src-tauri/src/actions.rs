@@ -72,6 +72,7 @@ struct TranscribeAction;
 async fn maybe_post_process_transcription(
     settings: &AppSettings,
     transcription: &str,
+    context: &str,
 ) -> Option<String> {
     if !settings.post_process_enabled {
         return None;
@@ -143,13 +144,15 @@ async fn maybe_post_process_transcription(
     let templated_prompt = prompt
         .replace("${output}", transcription)
         .replace("${dictionary}", &dictionary_str)
-        .replace("${language}", &language_label);
+        .replace("${language}", &language_label)
+        .replace("${transcript}", context);
 
     if provider.supports_structured_output {
         let system_prompt = build_post_process_system_prompt(
             &prompt
                 .replace("${dictionary}", &dictionary_str)
-                .replace("${language}", &language_label),
+                .replace("${language}", &language_label)
+                .replace("${transcript}", context),
         );
 
         match crate::llm_client::send_chat_completion_with_schema(
@@ -347,7 +350,7 @@ impl ShortcutAction for TranscribeAction {
 
                             let post_process_result = timeout(
                                 Duration::from_secs(POST_PROCESS_TIMEOUT_SECS),
-                                maybe_post_process_transcription(&settings, &transcription),
+                                maybe_post_process_transcription(&settings, &transcription, &crate::context::text_before_cursor(settings.context_lines, settings.context_max_characters)),
                             )
                             .await;
 

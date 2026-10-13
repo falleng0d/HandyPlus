@@ -135,6 +135,8 @@ export const SettingsSchema = z.object({
   post_process_models: z.record(z.string()).optional().default({}),
   post_process_prompts: z.array(LLMPromptSchema).optional().default([]),
   post_process_selected_prompt_id: z.string().nullable().optional(),
+  context_lines: z.number().optional().default(30),
+  context_max_characters: z.number().nullable().optional().default(null),
   mute_while_recording: z.boolean().optional().default(false),
   lower_volume_while_recording: z.boolean().optional().default(false),
   volume_while_recording: z.number().optional().default(0.5),

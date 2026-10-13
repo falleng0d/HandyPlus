@@ -85,6 +85,8 @@ const DEFAULT_SETTINGS: Partial<Settings> = {
   on_recording_start_script: "",
   on_recording_end_script: "",
   pause_dragon_when_dictating: false,
+  context_lines: 30,
+  context_max_characters: null,
 };
 
 const DEFAULT_AUDIO_DEVICE: AudioDevice = {
@@ -145,6 +147,8 @@ const settingUpdaters: {
   clipboard_handling: (value) =>
     invoke("change_clipboard_handling_setting", { handling: value }),
   history_limit: (value) => invoke("update_history_limit", { limit: value }),
+  context_lines: (value) => invoke("change_context_lines_setting", { lines: value }),
+  context_max_characters: (value) => invoke("change_context_max_characters_setting", { maxCharacters: value }),
   post_process_enabled: (value) =>
     invoke("change_post_process_enabled_setting", { enabled: value }),
   post_process_selected_prompt_id: (value) =>

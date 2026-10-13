@@ -413,8 +413,51 @@ export const PostProcessingSettingsPrompts = React.memo(
 PostProcessingSettingsPrompts.displayName = "PostProcessingSettingsPrompts";
 
 export const PostProcessingSettings: React.FC = () => {
+  const { getSetting, updateSetting } = useSettings();
+  const contextLines = getSetting("context_lines") ?? 30;
+  const maxCharacters = getSetting("context_max_characters");
+
   return (
     <div className="max-w-3xl w-full mx-auto space-y-6">
+      <SettingsGroup title="Context">
+        <SettingContainer
+          title="Lines before cursor"
+          description="Read this many lines before the cursor through Windows Accessibility/UI Automation and expose them as ${transcript}."
+          descriptionMode="tooltip"
+          layout="horizontal"
+          grouped={true}
+        >
+          <Input
+            type="number"
+            min="0"
+            value={contextLines}
+            onChange={(event) =>
+              updateSetting("context_lines", Math.max(0, Number(event.target.value) || 0))
+            }
+            variant="compact"
+          />
+        </SettingContainer>
+        <SettingContainer
+          title="Maximum context characters"
+          description="Limit ${transcript} by characters. Leave empty for unlimited."
+          descriptionMode="tooltip"
+          layout="horizontal"
+          grouped={true}
+        >
+          <Input
+            type="number"
+            min="0"
+            value={maxCharacters ?? ""}
+            onChange={(event) => {
+              const value = event.target.value;
+              updateSetting("context_max_characters", value === "" ? null : Math.max(0, Number(value) || 0));
+            }}
+            placeholder="Unlimited"
+            variant="compact"
+          />
+        </SettingContainer>
+      </SettingsGroup>
+
       <SettingsGroup title="API (OpenAI Compatible)">
         <PostProcessingSettingsApi />
       </SettingsGroup>

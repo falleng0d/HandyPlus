@@ -4,6 +4,7 @@ pub mod audio_toolkit;
 mod catalog;
 mod clipboard;
 mod command;
+mod context;
 mod commands;
 mod dragon;
 mod hotkey;
@@ -260,6 +261,8 @@ pub fn run() {
             command::change_paste_method_setting,
             command::change_clipboard_handling_setting,
             command::change_post_process_enabled_setting,
+            command::change_context_lines_setting,
+            command::change_context_max_characters_setting,
             command::change_post_process_base_url_setting,
             command::change_post_process_api_key_setting,
             command::change_post_process_model_setting,

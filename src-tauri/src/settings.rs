@@ -259,6 +259,10 @@ pub struct AppSettings {
     pub post_process_prompts: Vec<LLMPrompt>,
     #[serde(default)]
     pub post_process_selected_prompt_id: Option<String>,
+    #[serde(default = "default_context_lines")]
+    pub context_lines: usize,
+    #[serde(default)]
+    pub context_max_characters: Option<usize>,
     #[serde(default)]
     pub mute_while_recording: bool,
     #[serde(default = "default_lower_volume_while_recording")]
@@ -360,6 +364,10 @@ fn default_sound_theme() -> SoundTheme {
 
 fn default_language_shortcut_sound_theme() -> SoundTheme {
     SoundTheme::Marimba
+}
+
+fn default_context_lines() -> usize {
+    30
 }
 
 fn default_post_process_enabled() -> bool {
@@ -612,6 +620,8 @@ pub fn get_default_settings() -> AppSettings {
         post_process_models: default_post_process_models(),
         post_process_prompts: default_post_process_prompts(),
         post_process_selected_prompt_id: None,
+        context_lines: default_context_lines(),
+        context_max_characters: None,
         mute_while_recording: false,
         lower_volume_while_recording: false,
         volume_while_recording: default_volume_while_recording(),

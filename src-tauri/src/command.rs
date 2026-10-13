@@ -493,3 +493,19 @@ pub fn change_mute_while_recording_setting(app: AppHandle, enabled: bool) -> Res
 
     Ok(())
 }
+
+#[tauri::command]
+pub fn change_context_lines_setting(app: AppHandle, lines: usize) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.context_lines = lines;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn change_context_max_characters_setting(app: AppHandle, max_characters: Option<usize>) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.context_max_characters = max_characters;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
