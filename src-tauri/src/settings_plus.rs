@@ -2,7 +2,9 @@
 //! track their own version so upstream's schema numbering stays independent.
 
 use crate::settings::{AppSettings, TranscribeAcceleratorSetting};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use specta::Type;
 
 pub const CURRENT_PLUS_SETTINGS_VERSION: u32 = 1;
 
@@ -15,6 +17,20 @@ pub const DEFAULT_VOLUME_WHILE_RECORDING: f32 = 0.3;
 /// Silero frame length used by the rdev-era builds, which stored VAD timings
 /// as frame counts.
 const RDEV_ERA_VAD_FRAME_MS: u64 = 30;
+
+/// A language the user can switch to with a shortcut. `prompt_id` and `model`
+/// are applied with it when set.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
+pub struct LanguageConfig {
+    pub id: String,
+    pub language: String,
+    #[serde(default)]
+    pub shortcut_binding: String,
+    #[serde(default)]
+    pub prompt_id: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+}
 
 pub fn default_plus_settings_version() -> u32 {
     CURRENT_PLUS_SETTINGS_VERSION
@@ -43,6 +59,11 @@ fn migrate_rdev_era_store(settings: &mut AppSettings, stored: &Value) {
         binding.current_binding = rdev_shortcut_to_handy_keys(&binding.current_binding);
         binding.default_binding = rdev_shortcut_to_handy_keys(&binding.default_binding);
     }
+    for config in &mut settings.language_configs {
+        config.shortcut_binding = rdev_shortcut_to_handy_keys(&config.shortcut_binding);
+    }
+    settings.language_cycle_shortcut =
+        rdev_shortcut_to_handy_keys(&settings.language_cycle_shortcut);
     move_shortcut_to_post_processing(settings, stored);
 
     for (frames_key, ms) in [
@@ -257,6 +278,16 @@ mod tests {
         assert!(settings.custom_word_correction_enabled);
         assert!(settings.lower_volume_while_recording);
         assert!((settings.volume_while_recording - 0.06).abs() < 1e-6);
+        assert_eq!(settings.language_configs.len(), 2);
+        assert_eq!(settings.language_configs[1].language, "pt");
+        assert_eq!(
+            settings.language_configs[1].prompt_id.as_deref(),
+            Some("prompt_1772221696122")
+        );
+        assert_eq!(
+            settings.language_shortcut_sound_theme,
+            crate::settings::SoundTheme::Pop
+        );
         assert_eq!(
             settings.transcribe_accelerator,
             TranscribeAcceleratorSetting::Auto
@@ -266,6 +297,19 @@ mod tests {
             settings.plus_settings_version,
             CURRENT_PLUS_SETTINGS_VERSION
         );
+    }
+
+    #[test]
+    fn rdev_era_language_shortcuts_use_handy_keys_names() {
+        let mut stored = rdev_era_store();
+        stored["language_cycle_shortcut"] = "right ctrl+l".into();
+        stored["language_configs"][0]["shortcut_binding"] = "left alt+f9".into();
+
+        let settings = load(&stored);
+
+        assert_eq!(settings.language_cycle_shortcut, "ctrl_right+l");
+        assert_eq!(settings.language_configs[0].shortcut_binding, "alt_left+f9");
+        assert_eq!(settings.language_configs[1].shortcut_binding, "");
     }
 
     #[test]

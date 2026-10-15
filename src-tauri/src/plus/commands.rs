@@ -1,5 +1,7 @@
+use crate::audio_feedback::{self, SoundType};
 use crate::managers::audio::AudioRecordingManager;
-use crate::settings::{self, AppSettings};
+use crate::settings::{self, AppSettings, SoundTheme};
+use crate::settings_plus::LanguageConfig;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 
@@ -97,6 +99,39 @@ pub fn change_volume_while_recording_setting(app: AppHandle, volume: f32) -> Res
     }
     update_settings(&app, |s| s.volume_while_recording = volume);
     Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_language_configs(app: AppHandle, configs: Vec<LanguageConfig>) -> Result<(), String> {
+    crate::plus::languages::update(&app, |s| s.language_configs = configs)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_language_cycle_shortcut(app: AppHandle, shortcut: String) -> Result<(), String> {
+    crate::plus::languages::update(&app, |s| s.language_cycle_shortcut = shortcut)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_language_shortcut_sound_theme_setting(
+    app: AppHandle,
+    theme: SoundTheme,
+) -> Result<(), String> {
+    update_settings(&app, |s| s.language_shortcut_sound_theme = theme);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn play_language_shortcut_sound(app: AppHandle) {
+    let theme = settings::get_settings(&app).language_shortcut_sound_theme;
+    let _ = tokio::task::spawn_blocking(move || {
+        audio_feedback::play_theme_sound_blocking(&app, theme, SoundType::Start);
+        audio_feedback::play_theme_sound_blocking(&app, theme, SoundType::Stop);
+    })
+    .await;
 }
 
 #[tauri::command]

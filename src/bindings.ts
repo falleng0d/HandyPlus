@@ -983,6 +983,33 @@ async changePauseDragonWhenDictatingSetting(enabled: boolean) : Promise<Result<n
     else return { status: "error", error: e  as any };
 }
 },
+async updateLanguageConfigs(configs: LanguageConfig[]) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_language_configs", { configs }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async updateLanguageCycleShortcut(shortcut: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_language_cycle_shortcut", { shortcut }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async changeLanguageShortcutSoundThemeSetting(theme: SoundTheme) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_language_shortcut_sound_theme_setting", { theme }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async playLanguageShortcutSound() : Promise<void> {
+    await TAURI_INVOKE("play_language_shortcut_sound");
+},
 async changeLowerVolumeWhileRecordingSetting(enabled: boolean) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("change_lower_volume_while_recording_setting", { enabled }) };
@@ -1127,7 +1154,7 @@ vad_backend?: VadBackend;
  * not gated on this — that follows model capability. Migrated from the old
  * `overlay_position` (position `none` → style `None`).
  */
-overlay_style?: OverlayStyle; vad_threshold: number; vad_prefill_ms: number; vad_hangover_ms: number; vad_onset_ms: number; context_lines: number; context_max_characters: number | null; typing_interval_ms: number; on_recording_start_script: string; on_recording_end_script: string; custom_word_correction_enabled: boolean; transcription_timeout_secs: number; post_process_timeout_secs: number; lower_volume_while_recording: boolean; volume_while_recording: number; pause_dragon_when_dictating: boolean }
+overlay_style?: OverlayStyle; vad_threshold: number; vad_prefill_ms: number; vad_hangover_ms: number; vad_onset_ms: number; context_lines: number; context_max_characters: number | null; typing_interval_ms: number; on_recording_start_script: string; on_recording_end_script: string; custom_word_correction_enabled: boolean; transcription_timeout_secs: number; post_process_timeout_secs: number; lower_volume_while_recording: boolean; volume_while_recording: number; pause_dragon_when_dictating: boolean; language_configs: LanguageConfig[]; language_cycle_shortcut: string; language_shortcut_sound_theme: SoundTheme }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { transcribe: string[]; ort: string[]; gpu_devices: GpuDeviceOption[] }
@@ -1168,6 +1195,11 @@ export type KeyboardDiagnosticReport = { secure_input_enabled: boolean; culprit_
 key_down: number; key_up: number; flags_changed: number; mouse: number; duration_ms: number }
 export type KeyboardImplementation = "tauri" | "handy_keys"
 export type LLMPrompt = { id: string; name: string; prompt: string }
+/**
+ * A language the user can switch to with a shortcut. `prompt_id` and `model`
+ * are applied with it when set.
+ */
+export type LanguageConfig = { id: string; language: string; shortcut_binding?: string; prompt_id?: string | null; model?: string | null }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
 export type ModelInfo = { id: string; name: string; description: string; filename: string; source: ModelSource; size_mb: number; is_downloaded: boolean; is_downloading: boolean; partial_size: number; is_directory: boolean; engine_type: EngineType; accuracy_score: number; speed_score: number; supports_translation: boolean; is_recommended: boolean; supported_languages: string[]; supports_language_selection: boolean; is_custom: boolean; supports_streaming: boolean; supports_language_detection: boolean }
 export type ModelLoadStatus = { is_loaded: boolean; current_model: string | null }

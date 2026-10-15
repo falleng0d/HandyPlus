@@ -54,6 +54,7 @@ pub fn init_shortcuts(app: &AppHandle) {
             }
         }
     }
+    crate::plus::languages::register_all(app);
 }
 
 /// Whether the recording lifecycle currently wants the cancel shortcut.
@@ -294,6 +295,7 @@ pub fn suspend_all_shortcuts(app: &AppHandle) {
             );
         }
     }
+    crate::plus::languages::unregister_all(app);
 }
 
 /// Re-register every binding from settings after shortcut recording ends.
@@ -312,6 +314,7 @@ pub fn resume_all_shortcuts(app: &AppHandle) {
             debug!("resume_all_shortcuts: could not register '{}': {}", id, e);
         }
     }
+    crate::plus::languages::register_all(app);
 }
 
 /// Temporarily unregister all bindings while the user is recording a
@@ -372,6 +375,7 @@ pub fn change_keyboard_implementation_setting(
 
     // Unregister all shortcuts from the current implementation
     unregister_all_shortcuts(&app, current_impl);
+    crate::plus::languages::unregister_all(&app);
 
     // Update the setting
     let mut settings = settings::get_settings(&app);
@@ -387,6 +391,7 @@ pub fn change_keyboard_implementation_setting(
     // Initialize new implementation if needed (HandyKeys needs state)
     if new_impl == KeyboardImplementation::HandyKeys && initialize_handy_keys_with_rollback(&app)? {
         // Shortcuts already registered during init.
+        crate::plus::languages::register_all(&app);
         crate::secure_input::reconcile_fallback(&app);
         return Ok(ImplementationChangeResult {
             success: true,
@@ -396,6 +401,7 @@ pub fn change_keyboard_implementation_setting(
 
     // Register all shortcuts with new implementation, resetting invalid ones
     let reset_bindings = register_all_shortcuts_for_implementation(&app, new_impl);
+    crate::plus::languages::register_all(&app);
     crate::secure_input::reconcile_fallback(&app);
 
     // Emit event to notify frontend of the change

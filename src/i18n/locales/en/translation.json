@@ -12,6 +12,7 @@
   "sidebar": {
     "general": "General",
     "models": "Models",
+    "languages": "Languages",
     "advanced": "Advanced",
     "postProcessing": "Post Process",
     "history": "History",
@@ -717,6 +718,37 @@
           "description": "High-performance tensor library for on-device machine learning inference",
           "details": "Handy's local speech-to-text is built on transcribe.cpp and ggml. Thanks to the amazing work by Georgi Gerganov and contributors."
         }
+      }
+    },
+    "languages": {
+      "title": "Language Shortcuts",
+      "description": "Switch the transcription language with a shortcut. A language can also switch the model and the post-processing prompt.",
+      "needsHandyKeys": "Language shortcuts need the handy-keys keyboard implementation. Turn it on in Advanced settings.",
+      "noShortcut": "No shortcut",
+      "clearShortcut": "Clear shortcut",
+      "keepCurrent": "Keep current",
+      "needsDownload": "{{name}} (download)",
+      "remove": "Remove {{language}}",
+      "cycle": {
+        "title": "Cycle Languages",
+        "description": "Switches to the next language in the list below, in order."
+      },
+      "sound": {
+        "title": "Language Shortcut Sound",
+        "description": "Played when the cycle shortcut switches language, even when audio feedback is off.",
+        "preview": "Preview sound (plays start then stop)"
+      },
+      "add": {
+        "title": "Add Language",
+        "description": "Adds a language to the list below.",
+        "placeholder": "Select a language..."
+      },
+      "list": {
+        "title": "Languages",
+        "description": "Model, prompt and shortcut for each language. Keep current leaves that setting alone."
+      },
+      "errors": {
+        "record": "Could not record a shortcut: {{error}}"
       }
     }
   },

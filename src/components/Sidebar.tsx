@@ -1,6 +1,14 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Cog, FlaskConical, History, Info, Sparkles, Cpu } from "lucide-react";
+import {
+  Cog,
+  FlaskConical,
+  History,
+  Info,
+  Sparkles,
+  Cpu,
+  Languages,
+} from "lucide-react";
 import HandyTextLogo from "./icons/HandyTextLogo";
 import HandyHand from "./icons/HandyHand";
 import { useSettings } from "../hooks/useSettings";
@@ -13,6 +21,7 @@ import {
   PostProcessingSettings,
   ModelsSettings,
 } from "./settings";
+import { LanguagesSettings } from "./settings/plus/languages/LanguagesSettings";
 
 export type SidebarSection = keyof typeof SECTIONS_CONFIG;
 
@@ -48,6 +57,12 @@ export const SECTIONS_CONFIG = {
     labelKey: "sidebar.models",
     icon: Cpu,
     component: ModelsSettings,
+    enabled: () => true,
+  },
+  languages: {
+    labelKey: "sidebar.languages",
+    icon: Languages,
+    component: LanguagesSettings,
     enabled: () => true,
   },
   advanced: {

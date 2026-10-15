@@ -548,6 +548,9 @@ pub struct AppSettings {
     pub lower_volume_while_recording: bool,
     pub volume_while_recording: f32,
     pub pause_dragon_when_dictating: bool,
+    pub language_configs: Vec<crate::settings_plus::LanguageConfig>,
+    pub language_cycle_shortcut: String,
+    pub language_shortcut_sound_theme: SoundTheme,
 }
 
 fn default_model() -> String {
@@ -1020,6 +1023,9 @@ pub fn get_default_settings() -> AppSettings {
         lower_volume_while_recording: false,
         volume_while_recording: crate::settings_plus::DEFAULT_VOLUME_WHILE_RECORDING,
         pause_dragon_when_dictating: false,
+        language_configs: Vec::new(),
+        language_cycle_shortcut: String::new(),
+        language_shortcut_sound_theme: SoundTheme::Pop,
     }
 }
 

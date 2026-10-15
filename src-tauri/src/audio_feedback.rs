@@ -72,6 +72,15 @@ pub fn play_test_sound(app: &AppHandle, sound_type: SoundType) {
     }
 }
 
+/// Plays a sound from `theme`, whatever the feedback settings say.
+pub fn play_theme_sound_blocking(app: &AppHandle, theme: SoundTheme, sound_type: SoundType) {
+    let mut settings = settings::get_settings(app);
+    settings.sound_theme = theme;
+    if let Some(path) = resolve_sound_path(app, &settings, sound_type) {
+        play_sound_blocking(app, &path);
+    }
+}
+
 fn play_sound_async(app: &AppHandle, path: PathBuf) {
     let app_handle = app.clone();
     thread::spawn(move || {

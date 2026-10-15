@@ -2,6 +2,8 @@ import { toast } from "sonner";
 import {
   commands,
   type AppSettings as Settings,
+  type LanguageConfig,
+  type SoundTheme,
   type Result,
 } from "@/bindings";
 
@@ -40,6 +42,14 @@ export const plusSettingUpdaters: {
   pause_dragon_when_dictating: (value) =>
     unwrapOrToast(
       commands.changePauseDragonWhenDictatingSetting(value as boolean),
+    ),
+  language_configs: (value) =>
+    unwrapOrToast(commands.updateLanguageConfigs(value as LanguageConfig[])),
+  language_cycle_shortcut: (value) =>
+    unwrapOrToast(commands.updateLanguageCycleShortcut(value as string)),
+  language_shortcut_sound_theme: (value) =>
+    unwrapOrToast(
+      commands.changeLanguageShortcutSoundThemeSetting(value as SoundTheme),
     ),
   typing_interval_ms: (value) =>
     unwrapOrToast(commands.changeTypingIntervalMsSetting(value as number)),
