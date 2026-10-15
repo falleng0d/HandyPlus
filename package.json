@@ -1,11 +1,11 @@
 {
-  "name": "handy-app",
+  "name": "handy-plus-app",
   "private": true,
   "version": "0.9.8",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build:js": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "eslint src",
@@ -17,9 +17,11 @@
     "test:keyboard": "bun src/lib/utils/keyboard.test.ts",
     "test:playwright": "playwright test",
     "test:playwright:ui": "playwright test --ui",
-    "check:translations": "bun scripts/check-translations.ts",
     "check:model-languages": "bun scripts/check-model-language-coverage.ts",
-    "postinstall": "bun scripts/check-nix-deps.ts"
+    "postinstall": "bun scripts/check-nix-deps.ts",
+    "build": "tauri build --config src-tauri/tauri.nosign.json",
+    "build-signed": "tauri build",
+    "check": "prettier --write . --log-level silent && tscx src && eslint src && cd src-tauri && cargo fmt && cargo check"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.16",

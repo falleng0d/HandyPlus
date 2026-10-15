@@ -696,10 +696,6 @@
     "pasteFailed": "Text could not be pasted into the active application.",
     "transcriptionFailedTitle": "Transcription Failed"
   },
-  "appLanguage": {
-    "title": "Application Language",
-    "description": "Change the language of the Handy interface"
-  },
   "theme": {
     "title": "Application Theme",
     "description": "Choose whether Handy follows your system theme or stays light or dark",

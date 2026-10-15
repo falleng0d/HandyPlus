@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Handy",
+  "productName": "HandyPlus",
   "version": "0.9.8",
-  "identifier": "com.pais.handy",
+  "identifier": "HandyPlus",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run build",
+    "beforeBuildCommand": "bun run build:js",
     "frontendDist": "../dist"
   },
   "app": {

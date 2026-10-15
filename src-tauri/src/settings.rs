@@ -473,8 +473,6 @@ pub struct AppSettings {
     pub mute_while_recording: bool,
     #[serde(default)]
     pub append_trailing_space: bool,
-    #[serde(default = "default_app_language")]
-    pub app_language: String,
     #[serde(default = "default_theme")]
     pub theme: Theme,
     #[serde(default)]
@@ -563,7 +561,7 @@ fn default_autostart_enabled() -> bool {
 }
 
 fn default_update_checks_enabled() -> bool {
-    true
+    false
 }
 
 fn default_show_whats_new_on_update() -> bool {
@@ -653,12 +651,6 @@ fn default_theme() -> Theme {
 
 fn default_post_process_enabled() -> bool {
     false
-}
-
-fn default_app_language() -> String {
-    tauri_plugin_os::locale()
-        .map(|l| l.replace('_', "-"))
-        .unwrap_or_else(|| "en".to_string())
 }
 
 fn default_show_tray_icon() -> bool {
@@ -972,7 +964,6 @@ pub fn get_default_settings() -> AppSettings {
         post_process_selected_prompt_id: None,
         mute_while_recording: false,
         append_trailing_space: false,
-        app_language: default_app_language(),
         theme: default_theme(),
         experimental_enabled: false,
         lazy_stream_close: false,
@@ -1408,7 +1399,6 @@ mod tests {
             "post_process_selected_prompt_id": null,
             "mute_while_recording": false,
             "append_trailing_space": false,
-            "app_language": "en",
             "experimental_enabled": false,
             "lazy_stream_close": false,
             "keyboard_implementation": "handy_keys",

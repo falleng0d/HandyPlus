@@ -461,7 +461,7 @@ jobs:
           set -euo pipefail
           PROFILE="${{ steps.build-profile.outputs.profile }}"
           # Frontend must exist for the app crate to compile (generate_context!).
-          bun run build
+          bun run build:js
           (
             cd src-tauri
             if [ "$PROFILE" = "release" ]; then cargo build --release; else cargo build; fi

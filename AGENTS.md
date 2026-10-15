@@ -20,18 +20,19 @@ bun run tauri dev
 # If cmake error on macOS:
 CMAKE_POLICY_VERSION_MINIMUM=3.5 bun run tauri dev
 
-# Build for production
-bun run tauri build
+# Build for production (unsigned; `bun run build-signed` uses upstream signing)
+bun run build
 
 # Frontend only development
 bun run dev        # Start Vite dev server
-bun run build      # Build frontend (TypeScript + Vite)
+bun run build:js   # Build frontend (TypeScript + Vite)
 bun run preview    # Preview built frontend
 ```
 
 **Linting and Formatting (run before committing):**
 
 ```bash
+bun check                 # Prettier, tscx, ESLint, cargo fmt and cargo check in one command
 bun run lint              # ESLint for frontend
 bun run lint:fix          # ESLint with auto-fix
 bun run format            # Prettier + cargo fmt
@@ -133,7 +134,7 @@ The app enforces single instance behavior — launching when already running bri
 
 ## Internationalization (i18n)
 
-All user-facing strings must use i18next translations. ESLint enforces this (no hardcoded strings in JSX).
+The UI is English only. All user-facing strings must still use i18next keys. ESLint enforces this (no hardcoded strings in JSX).
 
 **Adding new text:**
 
@@ -145,14 +146,9 @@ All user-facing strings must use i18next translations. ESLint enforces this (no 
 ```
 src/i18n/
 ├── index.ts           # i18n setup
-├── languages.ts       # Language metadata
 └── locales/
-    ├── en/translation.json  # English (source)
-    ├── de/, es/, fr/, ja/, ru/, zh/, ...
-    └── ...
+    └── en/translation.json
 ```
-
-For translation contribution guidelines, see [CONTRIBUTING_TRANSLATIONS.md](CONTRIBUTING_TRANSLATIONS.md).
 
 ## Code Style
 
@@ -212,7 +208,6 @@ See the [Troubleshooting](README.md#troubleshooting) section in README.md.
 - **Opening a PR:** Read [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md). Every section listed there is mandatory. If a section requires a human-written paragraph (e.g. "Human Written Description"), leave a clear TODO placeholder and ask the human contributor to fill it in — do not invent their voice.
 - **Opening an issue:** Read [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/). Blank issues are disabled; pick the right template (`bug_report.md` for bugs). Feature requests do not belong in issues — they go to [Discussions](https://github.com/cjpais/Handy/discussions) (see `.github/ISSUE_TEMPLATE/config.yml`).
 - **Proposing a feature:** Handy is under a feature freeze. New features require community support gathered in [Discussions](https://github.com/cjpais/Handy/discussions) before any PR is opened — see the PR template's "Community Feedback" section.
-- **Translations:** Follow [CONTRIBUTING_TRANSLATIONS.md](CONTRIBUTING_TRANSLATIONS.md).
 - **Full contributor workflow:** [CONTRIBUTING.md](CONTRIBUTING.md).
 
 **Commits:** Use conventional commit prefixes (`feat:`, `fix:`, `docs:`, `refactor:`, `chore:`). Focus the message on _why_, not _what_.
