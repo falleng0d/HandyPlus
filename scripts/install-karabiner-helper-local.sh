@@ -7,7 +7,7 @@ plist="$(cd "$(dirname "$0")/.." && pwd)/src-tauri/launch-daemons/com.falleng0d.
 installed_helper="/Library/PrivilegedHelperTools/com.falleng0d.karabiner-input.helper"
 installed_plist="/Library/LaunchDaemons/com.falleng0d.karabiner-input.helper.local.plist"
 label="com.falleng0d.karabiner-input.helper.local"
-certificate="${KARABINER_INPUT_LOCAL_CERT_SHA1:-E3262DC4B5253DFA15864022B77D68B35CBA8302}"
+certificate="${KARABINER_INPUT_LOCAL_CERT_SHA1:-8F8046C3F7528B1F860E80CA4CD212B9166F51D4}"
 
 test -x "$helper" || { echo "Missing helper at $helper" >&2; exit 1; }
 codesign -R="certificate leaf = H\"$certificate\"" --verify "$helper"

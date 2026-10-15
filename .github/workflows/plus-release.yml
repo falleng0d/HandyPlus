@@ -1,0 +1,158 @@
+name: "HandyPlus Release"
+
+# Builds the Windows and macOS installers signed with the self-signed
+# "HandyPlus Dev" certificate. A version tag (e.g. 0.9.8) publishes them to a
+# draft release; a manual run only keeps them as workflow artifacts.
+#
+# Secrets: HANDYPLUS_SIGNING_P12 (base64 of the .p12) and
+# HANDYPLUS_SIGNING_PASSWORD.
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CERT_SHA1: 8F8046C3F7528B1F860E80CA4CD212B9166F51D4
+
+jobs:
+  release:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --draft --generate-notes --title "$TAG"
+
+  build:
+    needs: release
+    if: ${{ !failure() && !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: src-tauri/target/release/bundle/nsis/*.exe src-tauri/target/release/bundle/msi/*.msi
+          - platform: macos-26
+            target: aarch64-apple-darwin
+            bundles: src-tauri/target/release/bundle/dmg/*.dmg
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Enable long paths (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+            -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+          git config --system core.longpaths true
+
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+          key: plus-${{ matrix.target }}
+          cache-bin: false
+
+      - name: Install Vulkan SDK (Windows)
+        if: runner.os == 'Windows'
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.4.309.0
+          cache: true
+
+      - name: Install SPIRV-Headers (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          vcpkg install spirv-headers:x64-windows
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg install spirv-headers failed" }
+          $prefix = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows" -replace '\\','/'
+          Add-Content $env:GITHUB_ENV "CMAKE_PREFIX_PATH=$prefix"
+
+      - name: Locate VC++ runtime redist (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsRoot = & $vswhere -latest -products * -property installationPath
+          $version = (Get-Content (Join-Path $vsRoot "VC\Auxiliary\Build\Microsoft.VCRedistVersion.default.txt")).Trim()
+          $archDir = Join-Path $vsRoot "VC\Redist\MSVC\$version\x64"
+          $crt = Get-ChildItem $archDir -Directory -Filter "Microsoft.VC*.CRT" | Sort-Object Name | Select-Object -Last 1
+          $omp = Get-ChildItem $archDir -Directory -Filter "Microsoft.VC*.OpenMP" | Sort-Object Name | Select-Object -Last 1
+          Add-Content -Path $env:GITHUB_ENV -Value "HANDY_VC_REDIST_DIRS=$($crt.FullName);$($omp.FullName)"
+
+      - name: Import signing certificate (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          P12: ${{ secrets.HANDYPLUS_SIGNING_P12 }}
+          P12_PASSWORD: ${{ secrets.HANDYPLUS_SIGNING_PASSWORD }}
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP "signing.p12"
+          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:P12))
+          certutil -f -user -p $env:P12_PASSWORD -importpfx My $path NoRoot
+          if ($LASTEXITCODE -ne 0) { throw "certificate import failed" }
+          Remove-Item $path
+
+      - name: Import signing certificate (macOS)
+        if: runner.os == 'macOS'
+        env:
+          P12: ${{ secrets.HANDYPLUS_SIGNING_P12 }}
+          P12_PASSWORD: ${{ secrets.HANDYPLUS_SIGNING_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(openssl rand -hex 16)"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -t 3600 -u "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/signing.p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain src-tauri/signing/handyplus-dev.pem
+          rm "$RUNNER_TEMP/signing.p12"
+          security find-identity -v -p codesigning "$keychain" | grep "$CERT_SHA1"
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        env:
+          KARABINER_INPUT_LOCAL_CERT_SHA1: ${{ env.CERT_SHA1 }}
+        run: bun run build-signed
+
+      - name: Upload to the release
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" ${{ matrix.bundles }} --clobber -R "$GITHUB_REPOSITORY"
+
+      - name: Upload artifacts
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: handyplus-${{ matrix.target }}
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 14
