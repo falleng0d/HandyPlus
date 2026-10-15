@@ -537,6 +537,8 @@ pub struct AppSettings {
     pub vad_prefill_ms: u64,
     pub vad_hangover_ms: u64,
     pub vad_onset_ms: u64,
+    pub context_lines: u32,
+    pub context_max_characters: Option<u32>,
 }
 
 fn default_model() -> String {
@@ -998,6 +1000,8 @@ pub fn get_default_settings() -> AppSettings {
         vad_prefill_ms: crate::audio_toolkit::vad::VAD_PREFILL_MS,
         vad_hangover_ms: crate::audio_toolkit::vad::VAD_OFFLINE_HANGOVER_MS,
         vad_onset_ms: crate::audio_toolkit::vad::VAD_ONSET_MS,
+        context_lines: crate::settings_plus::DEFAULT_CONTEXT_LINES,
+        context_max_characters: None,
     }
 }
 

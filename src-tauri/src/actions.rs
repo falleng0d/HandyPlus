@@ -173,6 +173,7 @@ async fn post_process_transcription(settings: &AppSettings, transcription: &str)
         debug!("Post-processing skipped because the selected prompt is empty");
         return None;
     }
+    let prompt = crate::plus::prompt::expand_prompt_variables(settings, &prompt).await;
 
     debug!(
         "Starting LLM post-processing with provider '{}' (model: {})",

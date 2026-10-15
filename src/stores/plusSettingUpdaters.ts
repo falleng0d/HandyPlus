@@ -25,4 +25,10 @@ export const plusSettingUpdaters: {
     unwrapOrToast(commands.changeVadHangoverMsSetting(value as number)),
   vad_onset_ms: (value) =>
     unwrapOrToast(commands.changeVadOnsetMsSetting(value as number)),
+  context_lines: (value) =>
+    unwrapOrToast(commands.changeContextLinesSetting(value as number)),
+  context_max_characters: (value) =>
+    unwrapOrToast(
+      commands.changeContextMaxCharactersSetting(value as number | null),
+    ),
 };

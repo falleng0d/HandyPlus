@@ -950,6 +950,22 @@ async changeVadOnsetMsSetting(ms: number) : Promise<Result<null, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async changeContextLinesSetting(lines: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_context_lines_setting", { lines }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async changeContextMaxCharactersSetting(maxCharacters: number | null) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_context_max_characters_setting", { maxCharacters }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -1039,7 +1055,7 @@ vad_backend?: VadBackend;
  * not gated on this — that follows model capability. Migrated from the old
  * `overlay_position` (position `none` → style `None`).
  */
-overlay_style?: OverlayStyle; vad_threshold: number; vad_prefill_ms: number; vad_hangover_ms: number; vad_onset_ms: number }
+overlay_style?: OverlayStyle; vad_threshold: number; vad_prefill_ms: number; vad_hangover_ms: number; vad_onset_ms: number; context_lines: number; context_max_characters: number | null }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { transcribe: string[]; ort: string[]; gpu_devices: GpuDeviceOption[] }

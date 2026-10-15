@@ -7,6 +7,7 @@ use serde_json::Value;
 pub const CURRENT_PLUS_SETTINGS_VERSION: u32 = 1;
 
 pub const DEFAULT_VAD_THRESHOLD: f32 = 0.3;
+pub const DEFAULT_CONTEXT_LINES: u32 = 30;
 
 /// Silero frame length used by the rdev-era builds, which stored VAD timings
 /// as frame counts.
@@ -39,6 +40,7 @@ fn migrate_rdev_era_store(settings: &mut AppSettings, stored: &Value) {
         binding.current_binding = rdev_shortcut_to_handy_keys(&binding.current_binding);
         binding.default_binding = rdev_shortcut_to_handy_keys(&binding.default_binding);
     }
+    move_shortcut_to_post_processing(settings, stored);
 
     for (frames_key, ms) in [
         ("vad_prefill_frames", &mut settings.vad_prefill_ms),
@@ -55,6 +57,38 @@ fn migrate_rdev_era_store(settings: &mut AppSettings, stored: &Value) {
     {
         settings.transcribe_accelerator = TranscribeAcceleratorSetting::Cpu;
     }
+}
+
+/// The rdev-era transcribe shortcut post-processed whenever post-processing was
+/// on. Upstream gives post-processing its own shortcut instead, so the user's
+/// shortcut moves there and plain transcription gets its default shortcut back.
+fn move_shortcut_to_post_processing(settings: &mut AppSettings, stored: &Value) {
+    let post_processing_on =
+        stored.get("post_process_enabled").and_then(Value::as_bool) == Some(true);
+    if !post_processing_on
+        || settings
+            .bindings
+            .contains_key("transcribe_with_post_process")
+    {
+        return;
+    }
+    let defaults = crate::settings::get_default_settings().bindings;
+    let (Some(transcribe), Some(default_transcribe), Some(post_process)) = (
+        settings.bindings.get_mut("transcribe"),
+        defaults.get("transcribe"),
+        defaults.get("transcribe_with_post_process"),
+    ) else {
+        return;
+    };
+    let mut post_process = post_process.clone();
+    post_process.current_binding = std::mem::replace(
+        &mut transcribe.current_binding,
+        default_transcribe.current_binding.clone(),
+    );
+    transcribe.default_binding = default_transcribe.default_binding.clone();
+    settings
+        .bindings
+        .insert(post_process.id.clone(), post_process);
 }
 
 /// Rewrites an rdev-era shortcut ("right alt", "left ctrl+f1", "ctrl+delete")
@@ -195,7 +229,14 @@ mod tests {
     fn rdev_era_store_keeps_the_users_setup() {
         let settings = load(&rdev_era_store());
 
-        assert_eq!(settings.bindings["transcribe"].current_binding, "alt_right");
+        assert_eq!(
+            settings.bindings["transcribe_with_post_process"].current_binding,
+            "alt_right"
+        );
+        assert_eq!(
+            settings.bindings["transcribe"].current_binding,
+            crate::settings::get_default_settings().bindings["transcribe"].current_binding
+        );
         assert_eq!(settings.shortcut_activation, ShortcutActivation::PushToTalk);
         assert_eq!(
             settings.selected_model,
@@ -236,6 +277,19 @@ mod tests {
     }
 
     #[test]
+    fn shortcut_stays_on_plain_transcription_when_post_processing_was_off() {
+        let mut stored = rdev_era_store();
+        stored["post_process_enabled"] = false.into();
+
+        let settings = load(&stored);
+
+        assert_eq!(settings.bindings["transcribe"].current_binding, "alt_right");
+        assert!(!settings
+            .bindings
+            .contains_key("transcribe_with_post_process"));
+    }
+
+    #[test]
     fn rdev_era_cpu_accelerator_stays_on_cpu() {
         let mut stored = rdev_era_store();
         stored["whisper_accelerator"] = "cpu".into();
@@ -255,7 +309,10 @@ mod tests {
         let mut reloaded: AppSettings = serde_json::from_value(stored.clone()).unwrap();
 
         assert!(!apply_plus_migrations(&mut reloaded, &stored));
-        assert_eq!(reloaded.bindings["transcribe"].current_binding, "alt_right");
+        assert_eq!(
+            reloaded.bindings["transcribe_with_post_process"].current_binding,
+            "alt_right"
+        );
     }
 
     #[test]

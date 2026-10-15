@@ -432,6 +432,18 @@
       "hotkey": {
         "title": "Hotkey"
       },
+      "context": {
+        "title": "Text Before Cursor",
+        "description": "How much of the focused editor's text ${transcript} sends to the model. It is read only when the prompt uses ${transcript}.",
+        "lines": {
+          "title": "Lines",
+          "description": "Number of lines before the cursor to include."
+        },
+        "maxCharacters": {
+          "title": "Character Limit",
+          "description": "Keep at most this many characters closest to the cursor. 0 means no limit."
+        }
+      },
       "api": {
         "title": "API (OpenAI Compatible)",
         "provider": {
@@ -473,7 +485,7 @@
         "promptLabelPlaceholder": "Enter prompt name",
         "promptInstructions": "Prompt Instructions",
         "promptInstructionsPlaceholder": "Write the instructions to run after transcription. Example: Improve grammar and clarity for the following text: ${output}",
-        "promptTip": "Tip: Use <code>${output}</code> to insert the transcribed text in your prompt.",
+        "promptTip": "Tip: Use <code>${output}</code> to insert the transcribed text in your prompt, <code>${dictionary}</code> for your custom words, <code>${language}</code> for the selected language and <code>${transcript}</code> for the text before your cursor.",
         "updatePrompt": "Update Prompt",
         "deletePrompt": "Delete Prompt",
         "createPrompt": "Create Prompt",

@@ -771,6 +771,8 @@ pub fn run(cli_args: CliArgs) {
             plus::commands::change_vad_prefill_ms_setting,
             plus::commands::change_vad_hangover_ms_setting,
             plus::commands::change_vad_onset_ms_setting,
+            plus::commands::change_context_lines_setting,
+            plus::commands::change_context_max_characters_setting,
         ])
         .events(collect_events![
             managers::history::HistoryUpdatePayload,

@@ -27,6 +27,29 @@ async fn apply_vad_tuning(
     rebuilt
 }
 
+fn update_settings(app: &AppHandle, change: impl FnOnce(&mut AppSettings)) {
+    let mut current = settings::get_settings(app);
+    change(&mut current);
+    settings::write_settings(app, current);
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_context_lines_setting(app: AppHandle, lines: u32) -> Result<(), String> {
+    update_settings(&app, |s| s.context_lines = lines);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_context_max_characters_setting(
+    app: AppHandle,
+    max_characters: Option<u32>,
+) -> Result<(), String> {
+    update_settings(&app, |s| s.context_max_characters = max_characters);
+    Ok(())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn change_vad_threshold_setting(app: AppHandle, threshold: f32) -> Result<(), String> {
