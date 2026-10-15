@@ -31,4 +31,22 @@ export const plusSettingUpdaters: {
     unwrapOrToast(
       commands.changeContextMaxCharactersSetting(value as number | null),
     ),
+  typing_interval_ms: (value) =>
+    unwrapOrToast(commands.changeTypingIntervalMsSetting(value as number)),
+  on_recording_start_script: (value) =>
+    unwrapOrToast(commands.changeRecordingStartScriptSetting(value as string)),
+  on_recording_end_script: (value) =>
+    unwrapOrToast(commands.changeRecordingEndScriptSetting(value as string)),
+  custom_word_correction_enabled: (value) =>
+    unwrapOrToast(
+      commands.changeCustomWordCorrectionEnabledSetting(value as boolean),
+    ),
+  transcription_timeout_secs: (value) =>
+    unwrapOrToast(
+      commands.changeTranscriptionTimeoutSecsSetting(value as number),
+    ),
+  post_process_timeout_secs: (value) =>
+    unwrapOrToast(
+      commands.changePostProcessTimeoutSecsSetting(value as number),
+    ),
 };

@@ -362,7 +362,12 @@ pub(crate) async fn process_transcription_output(
     let mut post_process_prompt: Option<String> = None;
 
     if post_process {
-        if let Some(processed_text) = post_process_transcription(&settings, &final_text).await {
+        if let Some(processed_text) = crate::plus::timeouts::post_process(
+            &settings,
+            post_process_transcription(&settings, &final_text),
+        )
+        .await
+        {
             post_processed_text = Some(processed_text.clone());
             final_text = processed_text;
 
@@ -377,6 +382,8 @@ pub(crate) async fn process_transcription_output(
             }
         }
     }
+
+    let final_text = crate::plus::text::strip_trailing_periods(&final_text);
 
     ProcessedTranscription {
         final_text,
@@ -479,6 +486,7 @@ impl ShortcutAction for TranscribeAction {
                     "Recording request accepted in {:?}; waiting for first microphone samples",
                     recording_start_time.elapsed()
                 );
+                crate::plus::recording::started(app);
                 let generation = readiness.generation();
                 let app_clone = app.clone();
                 let rm_clone = Arc::clone(&rm);
@@ -596,6 +604,7 @@ impl ShortcutAction for TranscribeAction {
 
         // Unmute before playing audio feedback so the stop sound is audible
         rm.remove_mute();
+        crate::plus::recording::ended(app);
 
         // Play audio feedback for recording stop
         play_feedback_sound(app, SoundType::Stop);
@@ -649,17 +658,18 @@ impl ShortcutAction for TranscribeAction {
                     // running, finalize it and use its text (all audio was already
                     // fed to the stream); otherwise batch-transcribe the samples.
                     let transcription_time = Instant::now();
-                    let transcription_result = match tm.finalize_stream() {
-                        // A finalized stream with usable text wins. An empty result
-                        // (no active stream, produced nothing, or a finalize error
-                        // after the engine was returned) falls back to a full batch
-                        // transcription of the same audio. A finalize timeout is
-                        // surfaced instead — the worker may still hold the engine,
-                        // so a batch fallback would contend with it.
-                        Ok(Some(text)) if !text.trim().is_empty() => Ok(text),
-                        Ok(_) => tm.transcribe(samples),
-                        Err(err) => Err(err),
-                    };
+                    // A finalized stream with usable text wins. An empty result
+                    // (no active stream, produced nothing, or a finalize error
+                    // after the engine was returned) falls back to a full batch
+                    // transcription of the same audio. A finalize timeout is
+                    // surfaced instead — the worker may still hold the engine,
+                    // so a batch fallback would contend with it.
+                    let transcription_result = crate::plus::timeouts::transcribe(
+                        &get_settings(&ah),
+                        Arc::clone(&tm),
+                        samples,
+                    )
+                    .await;
 
                     // Await WAV save and verify
                     let wav_saved = match wav_handle.await {

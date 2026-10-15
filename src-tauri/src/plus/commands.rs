@@ -78,3 +78,48 @@ pub async fn change_vad_hangover_ms_setting(app: AppHandle, ms: u64) -> Result<(
 pub async fn change_vad_onset_ms_setting(app: AppHandle, ms: u64) -> Result<(), String> {
     apply_vad_tuning(app, |s| s.vad_onset_ms = ms).await
 }
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_typing_interval_ms_setting(app: AppHandle, interval_ms: u64) -> Result<(), String> {
+    update_settings(&app, |s| s.typing_interval_ms = interval_ms);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_recording_start_script_setting(app: AppHandle, script: String) -> Result<(), String> {
+    update_settings(&app, |s| s.on_recording_start_script = script);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_recording_end_script_setting(app: AppHandle, script: String) -> Result<(), String> {
+    update_settings(&app, |s| s.on_recording_end_script = script);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_custom_word_correction_enabled_setting(
+    app: AppHandle,
+    enabled: bool,
+) -> Result<(), String> {
+    update_settings(&app, |s| s.custom_word_correction_enabled = enabled);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_transcription_timeout_secs_setting(app: AppHandle, secs: u32) -> Result<(), String> {
+    update_settings(&app, |s| s.transcription_timeout_secs = secs);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_post_process_timeout_secs_setting(app: AppHandle, secs: u32) -> Result<(), String> {
+    update_settings(&app, |s| s.post_process_timeout_secs = secs);
+    Ok(())
+}

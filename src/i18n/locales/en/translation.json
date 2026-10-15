@@ -387,6 +387,32 @@
         "title": "Voice Activity Detection",
         "description": "Filter silence from recordings. Streaming-capable models use a longer VAD tail; disabling VAD records raw audio."
       },
+      "seconds": "s",
+      "customWordCorrection": {
+        "title": "Custom Word Correction",
+        "description": "Use your custom words to correct transcriptions and, for Whisper models, as a hint to the model."
+      },
+      "typingInterval": {
+        "title": "Typing Interval",
+        "description": "Pause between characters when the paste method is Direct. Raise it for apps that drop fast typing; 0 types everything at once."
+      },
+      "transcriptionTimeout": {
+        "title": "Transcription Timeout",
+        "description": "Give up on a transcription that takes longer than this and keep the recording in History for a retry. 0 waits forever."
+      },
+      "recordingSession": {
+        "title": "Recording Scripts",
+        "description": "PowerShell 7 (pwsh) commands run in the background when a recording starts and ends.",
+        "placeholder": "e.g. Stop-Process -Name Spotify",
+        "startScript": {
+          "title": "On Recording Start",
+          "description": "Runs when recording starts."
+        },
+        "endScript": {
+          "title": "On Recording End",
+          "description": "Runs when recording stops or is cancelled."
+        }
+      },
       "vadTuning": {
         "milliseconds": "ms",
         "threshold": {
@@ -431,6 +457,10 @@
     "postProcessing": {
       "hotkey": {
         "title": "Hotkey"
+      },
+      "timeout": {
+        "title": "Post-Processing Timeout",
+        "description": "Paste the unprocessed transcript if the model takes longer than this. 0 waits forever."
       },
       "context": {
         "title": "Text Before Cursor",

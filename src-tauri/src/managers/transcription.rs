@@ -1314,7 +1314,10 @@ impl TranscriptionManager {
                         // whisper run extension to a non-whisper arch is rejected
                         // with INVALID_ARG, so skip it there and let the fuzzy
                         // post-correction handle custom words instead.
-                        let family = if settings.custom_words.is_empty() || !model_is_whisper {
+                        let family = if settings.custom_words.is_empty()
+                            || !model_is_whisper
+                            || !settings.custom_word_correction_enabled
+                        {
                             None
                         } else {
                             Some(RunExtension::Whisper(WhisperRunOptions {
@@ -1809,7 +1812,10 @@ fn post_process_transcription_text(
             _ => raw,
         };
 
-        let corrected = if !settings.custom_words.is_empty() && !custom_words_already_prompted {
+        let corrected = if settings.custom_word_correction_enabled
+            && !settings.custom_words.is_empty()
+            && !custom_words_already_prompted
+        {
             apply_custom_words(
                 &raw,
                 &settings.custom_words,

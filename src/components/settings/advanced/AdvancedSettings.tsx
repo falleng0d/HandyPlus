@@ -25,6 +25,12 @@ import { FillerWordRemoval } from "../FillerWordRemoval";
 import { ChineseScriptSetting } from "../ChineseScript";
 import { VadBackendSelector } from "../VadBackendSelector";
 import { VadTuning } from "../plus/VadTuning";
+import { RecordingSession } from "../plus/RecordingSession";
+import {
+  CustomWordCorrectionToggle,
+  TranscriptionTimeout,
+  TypingInterval,
+} from "../plus/TranscriptionExtras";
 
 export const AdvancedSettings: React.FC = () => {
   const { t } = useTranslation();
@@ -45,6 +51,7 @@ export const AdvancedSettings: React.FC = () => {
       <SettingsGroup title={t("settings.advanced.groups.output")}>
         <PasteMethodSetting descriptionMode="tooltip" grouped={true} />
         <TypingToolSetting descriptionMode="tooltip" grouped={true} />
+        <TypingInterval descriptionMode="tooltip" grouped={true} />
         <ClipboardHandlingSetting descriptionMode="tooltip" grouped={true} />
         <AutoSubmit descriptionMode="tooltip" grouped={true} />
       </SettingsGroup>
@@ -55,8 +62,12 @@ export const AdvancedSettings: React.FC = () => {
         <FillerWordRemoval descriptionMode="tooltip" grouped={true} />
         <ChineseScriptSetting descriptionMode="tooltip" grouped={true} />
         <CustomWords descriptionMode="tooltip" grouped />
+        <CustomWordCorrectionToggle descriptionMode="tooltip" grouped={true} />
+        <TranscriptionTimeout descriptionMode="tooltip" grouped={true} />
         <AppendTrailingSpace descriptionMode="tooltip" grouped={true} />
       </SettingsGroup>
+
+      <RecordingSession />
 
       <SettingsGroup title={t("settings.advanced.groups.history")}>
         <HistoryLimit descriptionMode="tooltip" grouped={true} />

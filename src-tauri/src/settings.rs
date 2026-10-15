@@ -539,6 +539,12 @@ pub struct AppSettings {
     pub vad_onset_ms: u64,
     pub context_lines: u32,
     pub context_max_characters: Option<u32>,
+    pub typing_interval_ms: u64,
+    pub on_recording_start_script: String,
+    pub on_recording_end_script: String,
+    pub custom_word_correction_enabled: bool,
+    pub transcription_timeout_secs: u32,
+    pub post_process_timeout_secs: u32,
 }
 
 fn default_model() -> String {
@@ -1002,6 +1008,12 @@ pub fn get_default_settings() -> AppSettings {
         vad_onset_ms: crate::audio_toolkit::vad::VAD_ONSET_MS,
         context_lines: crate::settings_plus::DEFAULT_CONTEXT_LINES,
         context_max_characters: None,
+        typing_interval_ms: 0,
+        on_recording_start_script: String::new(),
+        on_recording_end_script: String::new(),
+        custom_word_correction_enabled: true,
+        transcription_timeout_secs: crate::settings_plus::DEFAULT_TRANSCRIPTION_TIMEOUT_SECS,
+        post_process_timeout_secs: crate::settings_plus::DEFAULT_POST_PROCESS_TIMEOUT_SECS,
     }
 }
 

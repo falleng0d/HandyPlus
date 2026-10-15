@@ -721,7 +721,10 @@ fn paste_direct(
         info!("Falling back to enigo for direct text input");
     }
 
-    with_enigo(app_handle, |enigo| input::paste_text_direct(enigo, text))
+    let interval_ms = get_settings(app_handle).typing_interval_ms;
+    with_enigo(app_handle, |enigo| {
+        crate::plus::paste::type_text(enigo, text, interval_ms)
+    })
 }
 
 pub(crate) fn send_return_key(enigo: &mut Enigo, key_type: AutoSubmitKey) -> Result<(), String> {

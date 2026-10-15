@@ -4,4 +4,8 @@
 pub mod commands;
 pub mod context;
 pub mod overlay;
+pub mod paste;
 pub mod prompt;
+pub mod recording;
+pub mod text;
+pub mod timeouts;
