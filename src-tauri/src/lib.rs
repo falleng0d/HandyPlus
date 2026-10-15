@@ -774,6 +774,8 @@ pub fn run(cli_args: CliArgs) {
             plus::commands::change_context_lines_setting,
             plus::commands::change_context_max_characters_setting,
             plus::commands::change_typing_interval_ms_setting,
+            plus::commands::change_lower_volume_while_recording_setting,
+            plus::commands::change_volume_while_recording_setting,
             plus::commands::change_recording_start_script_setting,
             plus::commands::change_recording_end_script_setting,
             plus::commands::change_custom_word_correction_enabled_setting,

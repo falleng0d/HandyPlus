@@ -10,6 +10,7 @@ pub const DEFAULT_VAD_THRESHOLD: f32 = 0.3;
 pub const DEFAULT_CONTEXT_LINES: u32 = 30;
 pub const DEFAULT_TRANSCRIPTION_TIMEOUT_SECS: u32 = 120;
 pub const DEFAULT_POST_PROCESS_TIMEOUT_SECS: u32 = 15;
+pub const DEFAULT_VOLUME_WHILE_RECORDING: f32 = 0.3;
 
 /// Silero frame length used by the rdev-era builds, which stored VAD timings
 /// as frame counts.
@@ -254,6 +255,8 @@ mod tests {
         assert_eq!(settings.history_limit, 5);
         assert_eq!(settings.typing_interval_ms, 10);
         assert!(settings.custom_word_correction_enabled);
+        assert!(settings.lower_volume_while_recording);
+        assert!((settings.volume_while_recording - 0.06).abs() < 1e-6);
         assert_eq!(
             settings.transcribe_accelerator,
             TranscribeAcceleratorSetting::Auto

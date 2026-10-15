@@ -9,3 +9,4 @@ pub mod prompt;
 pub mod recording;
 pub mod text;
 pub mod timeouts;
+pub mod volume;

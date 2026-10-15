@@ -231,6 +231,14 @@
     },
     "sound": {
       "title": "Sound",
+      "lowerVolume": {
+        "title": "Lower Volume While Recording",
+        "description": "Turn the system volume down while you dictate, then restore it.",
+        "level": {
+          "title": "Volume While Recording",
+          "description": "System volume during recording. A quieter system is left as it is."
+        }
+      },
       "microphone": {
         "title": "Microphone",
         "description": "Select your preferred microphone device",

@@ -31,6 +31,12 @@ export const plusSettingUpdaters: {
     unwrapOrToast(
       commands.changeContextMaxCharactersSetting(value as number | null),
     ),
+  lower_volume_while_recording: (value) =>
+    unwrapOrToast(
+      commands.changeLowerVolumeWhileRecordingSetting(value as boolean),
+    ),
+  volume_while_recording: (value) =>
+    unwrapOrToast(commands.changeVolumeWhileRecordingSetting(value as number)),
   typing_interval_ms: (value) =>
     unwrapOrToast(commands.changeTypingIntervalMsSetting(value as number)),
   on_recording_start_script: (value) =>

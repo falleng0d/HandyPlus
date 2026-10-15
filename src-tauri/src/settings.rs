@@ -545,6 +545,8 @@ pub struct AppSettings {
     pub custom_word_correction_enabled: bool,
     pub transcription_timeout_secs: u32,
     pub post_process_timeout_secs: u32,
+    pub lower_volume_while_recording: bool,
+    pub volume_while_recording: f32,
 }
 
 fn default_model() -> String {
@@ -1014,6 +1016,8 @@ pub fn get_default_settings() -> AppSettings {
         custom_word_correction_enabled: true,
         transcription_timeout_secs: crate::settings_plus::DEFAULT_TRANSCRIPTION_TIMEOUT_SECS,
         post_process_timeout_secs: crate::settings_plus::DEFAULT_POST_PROCESS_TIMEOUT_SECS,
+        lower_volume_while_recording: false,
+        volume_while_recording: crate::settings_plus::DEFAULT_VOLUME_WHILE_RECORDING,
     }
 }
 

@@ -18,8 +18,20 @@ pub fn started(app: &AppHandle) {
     run_script(&settings.on_recording_start_script, "recording start");
 }
 
+/// The microphone delivers samples and the start sound has played.
+pub fn ready(app: &AppHandle) {
+    if !SESSION_ACTIVE.load(Ordering::SeqCst) {
+        return;
+    }
+    let settings = get_settings(app);
+    if settings.lower_volume_while_recording {
+        crate::plus::volume::lower_to(settings.volume_while_recording);
+    }
+}
+
 /// Recording stopped or was cancelled.
 pub fn ended(app: &AppHandle) {
+    crate::plus::volume::restore();
     if !SESSION_ACTIVE.swap(false, Ordering::SeqCst) {
         return;
     }
