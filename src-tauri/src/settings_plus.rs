@@ -46,11 +46,39 @@ pub fn apply_plus_migrations(settings: &mut AppSettings, stored: &Value) -> bool
     }
 
     if stored_version < 1 {
-        migrate_rdev_era_store(settings, stored);
+        if is_mac_fork_store(stored) {
+            migrate_mac_fork_store(settings, stored);
+        } else {
+            migrate_rdev_era_store(settings, stored);
+        }
     }
 
     settings.plus_settings_version = CURRENT_PLUS_SETTINGS_VERSION;
     true
+}
+
+/// The macOS fork of Handy shares the macOS bundle id, so its store is read
+/// as is. It already uses handy-keys names, so the rdev conversion must not run.
+fn is_mac_fork_store(stored: &Value) -> bool {
+    stored.get("post_process_input_max_lines").is_some()
+}
+
+fn migrate_mac_fork_store(settings: &mut AppSettings, stored: &Value) {
+    let limit = |key: &str| {
+        stored
+            .get(key)
+            .and_then(Value::as_u64)
+            .map(|value| value.min(u64::from(u32::MAX)) as u32)
+    };
+    if let Some(lines) = limit("post_process_input_max_lines") {
+        settings.context_lines = lines;
+    }
+    if let Some(paragraphs) = limit("post_process_input_max_paragraphs") {
+        settings.context_max_paragraphs = paragraphs;
+    }
+    if let Some(characters) = limit("post_process_input_max_chars") {
+        settings.context_max_characters = (characters > 0).then_some(characters);
+    }
 }
 
 /// Converts a store written by the rdev-based Handy+ builds (0.8.x).
@@ -351,6 +379,35 @@ mod tests {
             settings.transcribe_accelerator,
             TranscribeAcceleratorSetting::Cpu
         );
+    }
+
+    #[test]
+    fn mac_fork_store_keeps_its_shortcuts_and_context_limits() {
+        let mut stored = rdev_era_store();
+        stored["bindings"]["transcribe"]["current_binding"] = "ctrl_right+delete".into();
+        stored["post_process_input_max_lines"] = 300.into();
+        stored["post_process_input_max_paragraphs"] = 2.into();
+        stored["post_process_input_max_chars"] = 0.into();
+        stored["remove_trailing_punctuation"] = false.into();
+        stored["continuation_lowercase"] = true.into();
+
+        let settings = load(&stored);
+
+        assert_eq!(
+            settings.bindings["transcribe"].current_binding,
+            "ctrl_right+delete"
+        );
+        assert_eq!(settings.context_lines, 300);
+        assert_eq!(settings.context_max_paragraphs, 2);
+        assert_eq!(settings.context_max_characters, None);
+        assert!(!settings.remove_trailing_punctuation);
+        assert!(settings.continuation_lowercase);
+        assert!(!settings.lowercase_first_letter);
+    }
+
+    #[test]
+    fn rdev_era_store_keeps_removing_trailing_punctuation() {
+        assert!(load(&rdev_era_store()).remove_trailing_punctuation);
     }
 
     #[test]

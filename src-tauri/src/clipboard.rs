@@ -771,7 +771,7 @@ pub(crate) fn send_return_key(enigo: &mut Enigo, key_type: AutoSubmitKey) -> Res
 }
 
 fn should_send_auto_submit(auto_submit: bool, paste_method: PasteMethod) -> bool {
-    auto_submit && paste_method != PasteMethod::None
+    auto_submit && paste_method != PasteMethod::None && paste_method != PasteMethod::Karabiner
 }
 
 pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
@@ -804,6 +804,16 @@ pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
                 #[cfg(target_os = "linux")]
                 settings.typing_tool,
             )?;
+        }
+        PasteMethod::Karabiner => {
+            #[cfg(target_os = "macos")]
+            crate::plus::karabiner::type_text(
+                &text,
+                settings.auto_submit,
+                settings.auto_submit_key,
+            )?;
+            #[cfg(not(target_os = "macos"))]
+            return Err("Karabiner typing is only available on macOS".into());
         }
         PasteMethod::CtrlV | PasteMethod::CtrlShiftV | PasteMethod::ShiftInsert => {
             // Debug-gated receipt-sequenced paste (#502): restore the clipboard
@@ -957,6 +967,7 @@ e.g. 28:1 28:0 means pressing on the Enter button on a standard US keyboard.
     #[test]
     fn auto_submit_skips_none_paste_method() {
         assert!(!should_send_auto_submit(true, PasteMethod::None));
+        assert!(!should_send_auto_submit(true, PasteMethod::Karabiner));
     }
 
     #[test]

@@ -9,6 +9,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe438c63458706e03479442743baae6c88256498e6431708f6dfc520a26515d3"
 
 [[package]]
+name = "accessibility-sys"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46a6a8e90a1d8b96a48249e7c8f5b4058447bea8847280db7bfccb6dcab6b8e1"
+dependencies = [
+ "core-foundation-sys",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2503,9 +2512,11 @@ dependencies = [
 name = "handy"
 version = "0.9.8-plus"
 dependencies = [
+ "accessibility-sys",
  "anyhow",
  "chrono",
  "clap",
+ "core-foundation 0.10.1",
  "cpal",
  "earshot",
  "enigo",
@@ -2519,6 +2530,7 @@ dependencies = [
  "hf-hub",
  "hound",
  "isolang",
+ "karabiner-input",
  "libc",
  "log",
  "natural",
@@ -3222,6 +3234,14 @@ checksum = "5dea2b27dd239b2556ed7a25ba842fe47fd602e7fc7433c2a8d6106d4d9edd70"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "karabiner-input"
+version = "0.1.0"
+source = "git+https://github.com/falleng0d/karabiner-input?rev=5e4f238e58b2a8d84104afd3a1148baeae733284#5e4f238e58b2a8d84104afd3a1148baeae733284"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

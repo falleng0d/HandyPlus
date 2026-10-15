@@ -25,6 +25,19 @@ export const PromptContextSettings: React.FC = () => {
         onCommit={(value) => updateSetting("context_lines", value)}
       />
       <NumberSetting
+        title={t("settings.postProcessing.context.paragraphs.title")}
+        description={t(
+          "settings.postProcessing.context.paragraphs.description",
+        )}
+        value={getSetting("context_max_paragraphs") ?? 0}
+        min={0}
+        max={1000}
+        step={1}
+        disabled={isUpdating("context_max_paragraphs")}
+        grouped
+        onCommit={(value) => updateSetting("context_max_paragraphs", value)}
+      />
+      <NumberSetting
         title={t("settings.postProcessing.context.maxCharacters.title")}
         description={t(
           "settings.postProcessing.context.maxCharacters.description",

@@ -383,7 +383,7 @@ pub(crate) async fn process_transcription_output(
         }
     }
 
-    let final_text = crate::plus::text::strip_trailing_periods(&final_text);
+    let final_text = crate::plus::text::finish(&settings, final_text).await;
 
     ProcessedTranscription {
         final_text,

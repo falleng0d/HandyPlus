@@ -967,6 +967,38 @@ async changeContextMaxCharactersSetting(maxCharacters: number | null) : Promise<
     else return { status: "error", error: e  as any };
 }
 },
+async changeContextMaxParagraphsSetting(paragraphs: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_context_max_paragraphs_setting", { paragraphs }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async changeLowercaseFirstLetterSetting(enabled: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_lowercase_first_letter_setting", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async changeContinuationLowercaseSetting(enabled: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_continuation_lowercase_setting", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async changeRemoveTrailingPunctuationSetting(enabled: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_remove_trailing_punctuation_setting", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async changeTypingIntervalMsSetting(intervalMs: number) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("change_typing_interval_ms_setting", { intervalMs }) };
@@ -1154,7 +1186,7 @@ vad_backend?: VadBackend;
  * not gated on this — that follows model capability. Migrated from the old
  * `overlay_position` (position `none` → style `None`).
  */
-overlay_style?: OverlayStyle; vad_threshold: number; vad_prefill_ms: number; vad_hangover_ms: number; vad_onset_ms: number; context_lines: number; context_max_characters: number | null; typing_interval_ms: number; on_recording_start_script: string; on_recording_end_script: string; custom_word_correction_enabled: boolean; transcription_timeout_secs: number; post_process_timeout_secs: number; lower_volume_while_recording: boolean; volume_while_recording: number; pause_dragon_when_dictating: boolean; language_configs: LanguageConfig[]; language_cycle_shortcut: string; language_shortcut_sound_theme: SoundTheme }
+overlay_style?: OverlayStyle; vad_threshold: number; vad_prefill_ms: number; vad_hangover_ms: number; vad_onset_ms: number; context_lines: number; context_max_characters: number | null; context_max_paragraphs: number; lowercase_first_letter: boolean; continuation_lowercase: boolean; remove_trailing_punctuation: boolean; typing_interval_ms: number; on_recording_start_script: string; on_recording_end_script: string; custom_word_correction_enabled: boolean; transcription_timeout_secs: number; post_process_timeout_secs: number; lower_volume_while_recording: boolean; volume_while_recording: number; pause_dragon_when_dictating: boolean; language_configs: LanguageConfig[]; language_cycle_shortcut: string; language_shortcut_sound_theme: SoundTheme }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { transcribe: string[]; ort: string[]; gpu_devices: GpuDeviceOption[] }
@@ -1238,7 +1270,11 @@ export type OverlayPosition = "top" | "bottom"
  */
 export type OverlayStyle = "none" | "minimal" | "live"
 export type PaginatedHistory = { entries: HistoryEntry[]; has_more: boolean }
-export type PasteMethod = "ctrl_v" | "direct" | "none" | "shift_insert" | "ctrl_shift_v" | "external_script"
+export type PasteMethod = "ctrl_v" | "direct" | 
+/**
+ * macOS only. Types through the Karabiner virtual keyboard helper.
+ */
+"karabiner" | "none" | "shift_insert" | "ctrl_shift_v" | "external_script"
 export type PermissionAccess = "allowed" | "denied" | "unknown"
 export type PostProcessProvider = { id: string; label: string; base_url: string; allow_base_url_edit?: boolean; models_endpoint?: string | null; supports_structured_output?: boolean }
 export type RecordingRetentionPeriod = "never" | "preserve_limit" | "days_3" | "weeks_2" | "months_3"

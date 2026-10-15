@@ -31,6 +31,43 @@ export const CustomWordCorrectionToggle: React.FC<Props> = ({
   );
 };
 
+type FinishingToggleKey =
+  | "lowercase_first_letter"
+  | "continuation_lowercase"
+  | "remove_trailing_punctuation";
+
+const FINISHING_TOGGLES: { key: FinishingToggleKey; label: string }[] = [
+  { key: "lowercase_first_letter", label: "lowercaseFirstLetter" },
+  { key: "continuation_lowercase", label: "continuationLowercase" },
+  { key: "remove_trailing_punctuation", label: "removeTrailingPunctuation" },
+];
+
+/** Toggles that change the final text after post-processing. */
+export const TextFinishing: React.FC<Props> = ({
+  descriptionMode = "tooltip",
+  grouped = false,
+}) => {
+  const { t } = useTranslation();
+  const { getSetting, updateSetting, isUpdating } = useSettings();
+
+  return (
+    <>
+      {FINISHING_TOGGLES.map(({ key, label }) => (
+        <ToggleSwitch
+          key={key}
+          checked={getSetting(key) ?? false}
+          onChange={(enabled) => updateSetting(key, enabled)}
+          isUpdating={isUpdating(key)}
+          label={t(`settings.advanced.${label}.title`)}
+          description={t(`settings.advanced.${label}.description`)}
+          descriptionMode={descriptionMode}
+          grouped={grouped}
+        />
+      ))}
+    </>
+  );
+};
+
 export const TypingInterval: React.FC<Props> = ({
   descriptionMode = "tooltip",
   grouped = false,

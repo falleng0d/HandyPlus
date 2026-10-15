@@ -54,6 +54,40 @@ pub fn change_context_max_characters_setting(
 
 #[tauri::command]
 #[specta::specta]
+pub fn change_context_max_paragraphs_setting(
+    app: AppHandle,
+    paragraphs: u32,
+) -> Result<(), String> {
+    update_settings(&app, |s| s.context_max_paragraphs = paragraphs);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_lowercase_first_letter_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    update_settings(&app, |s| s.lowercase_first_letter = enabled);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_continuation_lowercase_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    update_settings(&app, |s| s.continuation_lowercase = enabled);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_remove_trailing_punctuation_setting(
+    app: AppHandle,
+    enabled: bool,
+) -> Result<(), String> {
+    update_settings(&app, |s| s.remove_trailing_punctuation = enabled);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn change_vad_threshold_setting(app: AppHandle, threshold: f32) -> Result<(), String> {
     if !(0.0..=1.0).contains(&threshold) {
         return Err(format!(

@@ -336,7 +336,8 @@
           "clipboardShiftInsert": "Clipboard (Shift+Insert)",
           "direct": "Direct",
           "none": "None",
-          "externalScript": "External Script"
+          "externalScript": "External Script",
+          "karabiner": "Karabiner Virtual Keyboard"
         },
         "externalScriptPlaceholder": "/path/to/your/script.sh"
       },
@@ -400,6 +401,18 @@
       "customWordCorrection": {
         "title": "Custom Word Correction",
         "description": "Use your custom words to correct transcriptions and, for Whisper models, as a hint to the model."
+      },
+      "lowercaseFirstLetter": {
+        "title": "Lowercase First Letter",
+        "description": "Always make the first letter of the final text lowercase."
+      },
+      "continuationLowercase": {
+        "title": "Lowercase When Continuing",
+        "description": "Make the first letter lowercase when there is already text before the cursor, so the text continues the sentence."
+      },
+      "removeTrailingPunctuation": {
+        "title": "Remove Trailing Punctuation",
+        "description": "Remove . , ; : and … from the end of the final text. Question and exclamation marks stay."
       },
       "typingInterval": {
         "title": "Typing Interval",
@@ -477,10 +490,14 @@
       },
       "context": {
         "title": "Text Before Cursor",
-        "description": "How much of the focused editor's text ${transcript} sends to the model. It is read only when the prompt uses ${transcript}.",
+        "description": "How much of the text before the cursor ${input} sends to the model. The text is read only when the prompt uses ${input} or an <on input> section. 0 means no limit.",
         "lines": {
           "title": "Lines",
-          "description": "Number of lines before the cursor to include."
+          "description": "Keep at most this many lines closest to the cursor. 0 means no limit."
+        },
+        "paragraphs": {
+          "title": "Paragraphs",
+          "description": "Keep at most this many paragraphs closest to the cursor. Paragraphs are separated by a blank line. 0 means no limit."
         },
         "maxCharacters": {
           "title": "Character Limit",
@@ -519,7 +536,7 @@
         "title": "Prompt",
         "selectedPrompt": {
           "title": "Selected Prompt",
-          "description": "Select a template for refining transcriptions or create a new one. Use ${output} inside the prompt text to reference the captured transcript."
+          "description": "Select a template for refining transcriptions or create a new one. Use ${output} inside the prompt text to reference the captured transcript. Text between <on input> and </on input> is kept only when there is text before the cursor."
         },
         "noPrompts": "No prompts available",
         "selectPrompt": "Select a prompt",
@@ -528,7 +545,7 @@
         "promptLabelPlaceholder": "Enter prompt name",
         "promptInstructions": "Prompt Instructions",
         "promptInstructionsPlaceholder": "Write the instructions to run after transcription. Example: Improve grammar and clarity for the following text: ${output}",
-        "promptTip": "Tip: Use <code>${output}</code> to insert the transcribed text in your prompt, <code>${dictionary}</code> for your custom words, <code>${language}</code> for the selected language and <code>${transcript}</code> for the text before your cursor.",
+        "promptTip": "Tip: Use <code>${output}</code> to insert the transcribed text in your prompt, <code>${dictionary}</code> for your custom words, <code>${language}</code> for the selected language, <code>${input}</code> for the text before your cursor and <code>${app}</code> for the app you are typing in.",
         "updatePrompt": "Update Prompt",
         "deletePrompt": "Delete Prompt",
         "createPrompt": "Create Prompt",

@@ -28,6 +28,7 @@ import { VadTuning } from "../plus/VadTuning";
 import { RecordingSession } from "../plus/RecordingSession";
 import {
   CustomWordCorrectionToggle,
+  TextFinishing,
   TranscriptionTimeout,
   TypingInterval,
 } from "../plus/TranscriptionExtras";
@@ -65,6 +66,7 @@ export const AdvancedSettings: React.FC = () => {
         <CustomWordCorrectionToggle descriptionMode="tooltip" grouped={true} />
         <TranscriptionTimeout descriptionMode="tooltip" grouped={true} />
         <AppendTrailingSpace descriptionMode="tooltip" grouped={true} />
+        <TextFinishing descriptionMode="tooltip" grouped={true} />
       </SettingsGroup>
 
       <RecordingSession />

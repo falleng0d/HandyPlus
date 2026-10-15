@@ -43,6 +43,13 @@ export const PasteMethodSetting: React.FC<PasteMethodProps> = React.memo(
         });
       }
 
+      if (osType === "macos") {
+        options.push({
+          value: "karabiner",
+          label: t("settings.advanced.pasteMethod.options.karabiner"),
+        });
+      }
+
       options.push({
         value: "none",
         label: t("settings.advanced.pasteMethod.options.none"),

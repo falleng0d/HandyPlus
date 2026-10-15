@@ -1,50 +1,343 @@
-//! Context providers for the text editor that currently has focus.
+//! Reads the focused text field and the app in front, for prompt variables and
+//! for finishing the transcript.
 
-#[cfg(windows)]
-fn read_before_cursor<T: uiautomation::actions::Text>(
-    control: T,
-    lines: usize,
-    max_characters: Option<usize>,
-) -> uiautomation::Result<String> {
-    use uiautomation::types::{TextPatternRangeEndpoint, TextUnit};
+use crate::settings::AppSettings;
 
-    let (_, caret) = control.get_caret_range()?;
-    let before = caret.clone();
-    before.move_endpoint_by_unit(
-        TextPatternRangeEndpoint::Start,
-        TextUnit::Line,
-        -(lines.min(i32::MAX as usize) as i32),
-    )?;
-    let text = before.get_text(-1)?;
-    Ok(match max_characters {
-        Some(limit) => {
-            let mut chars: Vec<char> = text.chars().rev().take(limit).collect();
-            chars.reverse();
-            chars.into_iter().collect()
+/// How much of the text before the cursor to keep, counted from the cursor.
+/// 0 means no limit.
+#[derive(Clone, Copy, Debug)]
+pub struct ContextLimits {
+    pub paragraphs: usize,
+    pub lines: usize,
+    pub characters: usize,
+}
+
+impl ContextLimits {
+    pub fn from_settings(settings: &AppSettings) -> Self {
+        Self {
+            paragraphs: settings.context_max_paragraphs as usize,
+            lines: settings.context_lines as usize,
+            characters: settings.context_max_characters.unwrap_or(0) as usize,
         }
-        None => text,
-    })
+    }
+}
+
+/// Text before the cursor in the focused field, trimmed to `limits`. Empty
+/// when the field can't be read. Blocks while the target app answers.
+pub fn text_before_cursor(limits: ContextLimits) -> String {
+    let text = platform::text_before_cursor(limits.lines).unwrap_or_default();
+    limit_tail(&text, limits)
+}
+
+/// Name of the app in front, or an empty string when it can't be read.
+pub fn foreground_app_name() -> String {
+    platform::foreground_app_name()
+        .map(|name| name.trim().to_string())
+        .unwrap_or_default()
+}
+
+/// Keeps the end of `text` within every limit; the shortest result wins.
+/// Line endings become `\n` once any limit is set.
+fn limit_tail(text: &str, limits: ContextLimits) -> String {
+    if limits.paragraphs == 0 && limits.lines == 0 && limits.characters == 0 {
+        return text.to_string();
+    }
+    let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
+    let chars: Vec<char> = normalized.chars().collect();
+    let mut start = 0;
+    if limits.characters > 0 {
+        start = start.max(chars.len().saturating_sub(limits.characters));
+    }
+    if limits.lines > 0 {
+        start = start.max(last_lines_start(&chars, limits.lines));
+    }
+    if limits.paragraphs > 0 {
+        start = start.max(last_paragraphs_start(&chars, limits.paragraphs));
+    }
+    chars[start..].iter().collect()
+}
+
+fn last_lines_start(chars: &[char], count: usize) -> usize {
+    let mut seen = 0;
+    for index in (0..chars.len()).rev() {
+        if chars[index] == '\n' {
+            seen += 1;
+            if seen == count {
+                return index + 1;
+            }
+        }
+    }
+    0
+}
+
+/// Paragraphs are separated by two or more newlines in a row.
+fn last_paragraphs_start(chars: &[char], count: usize) -> usize {
+    let mut seen = 0;
+    let mut index = chars.len();
+    while index > 0 {
+        index -= 1;
+        if chars[index] != '\n' {
+            continue;
+        }
+        let run_end = index;
+        while index > 0 && chars[index - 1] == '\n' {
+            index -= 1;
+        }
+        if run_end > index {
+            seen += 1;
+            if seen == count {
+                return run_end + 1;
+            }
+        }
+    }
+    0
 }
 
 #[cfg(windows)]
-pub fn text_before_cursor(lines: usize, max_characters: Option<usize>) -> String {
+mod platform {
     use uiautomation::controls::{EditControl, TextControl};
+    use uiautomation::types::{TextPatternRangeEndpoint, TextUnit};
     use uiautomation::UIAutomation;
 
-    let result = (|| -> uiautomation::Result<String> {
-        let automation = UIAutomation::new()?;
-        let focused = automation.get_focused_element()?;
-        if let Ok(edit) = EditControl::try_from(&focused) {
-            return read_before_cursor(edit, lines, max_characters);
-        }
-        let text = TextControl::try_from(focused)?;
-        read_before_cursor(text, lines, max_characters)
-    })();
+    fn read_before_cursor<T: uiautomation::actions::Text>(
+        control: T,
+        lines: usize,
+    ) -> uiautomation::Result<String> {
+        let (_, caret) = control.get_caret_range()?;
+        let before = caret.clone();
+        let lines = if lines == 0 {
+            i32::MAX
+        } else {
+            lines.min(i32::MAX as usize) as i32
+        };
+        before.move_endpoint_by_unit(TextPatternRangeEndpoint::Start, TextUnit::Line, -lines)?;
+        before.get_text(-1)
+    }
 
-    result.unwrap_or_default()
+    /// Reads at most `lines` lines (0 for all) up to the cursor.
+    pub fn text_before_cursor(lines: usize) -> Option<String> {
+        let result = (|| -> uiautomation::Result<String> {
+            let automation = UIAutomation::new()?;
+            let focused = automation.get_focused_element()?;
+            if let Ok(edit) = EditControl::try_from(&focused) {
+                return read_before_cursor(edit, lines);
+            }
+            let text = TextControl::try_from(focused)?;
+            read_before_cursor(text, lines)
+        })();
+        result.ok()
+    }
+
+    /// File name of the foreground window's program, without `.exe`.
+    pub fn foreground_app_name() -> Option<String> {
+        use windows::core::PWSTR;
+        use windows::Win32::Foundation::CloseHandle;
+        use windows::Win32::System::Threading::{
+            OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
+            PROCESS_QUERY_LIMITED_INFORMATION,
+        };
+        use windows::Win32::UI::WindowsAndMessaging::{
+            GetForegroundWindow, GetWindowThreadProcessId,
+        };
+
+        unsafe {
+            let window = GetForegroundWindow();
+            if window.0.is_null() {
+                return None;
+            }
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(window, Some(&mut pid));
+            if pid == 0 {
+                return None;
+            }
+            let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+            let mut buffer = [0u16; 260];
+            let mut size = buffer.len() as u32;
+            let read = QueryFullProcessImageNameW(
+                process,
+                PROCESS_NAME_WIN32,
+                PWSTR(buffer.as_mut_ptr()),
+                &mut size,
+            );
+            let _ = CloseHandle(process);
+            read.ok()?;
+            let path = String::from_utf16_lossy(&buffer[..size as usize]);
+            std::path::Path::new(&path)
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .map(str::to_string)
+        }
+    }
 }
 
-#[cfg(not(windows))]
-pub fn text_before_cursor(_lines: usize, _max_characters: Option<usize>) -> String {
-    String::new()
+#[cfg(target_os = "macos")]
+mod platform {
+    use accessibility_sys::{
+        kAXErrorSuccess, kAXFocusedUIElementAttribute, kAXSelectedTextRangeAttribute,
+        kAXValueAttribute, kAXValueTypeCFRange, AXUIElementCopyAttributeValue,
+        AXUIElementCreateSystemWide, AXUIElementSetMessagingTimeout, AXValueGetValue, AXValueRef,
+    };
+    use core_foundation::base::{CFGetTypeID, CFRange, CFRelease, CFTypeRef, TCFType};
+    use core_foundation::string::{CFString, CFStringRef};
+    use std::ffi::c_void;
+    use std::ptr;
+
+    /// Seconds to wait for the target app, so a hung app can't stall the
+    /// transcription.
+    const MESSAGING_TIMEOUT: f32 = 0.5;
+    const AX_FOCUSED_APPLICATION: &str = "AXFocusedApplication";
+    const AX_TITLE: &str = "AXTitle";
+
+    /// Returns an owned reference, or null when the attribute can't be read.
+    unsafe fn copy_attribute(element: CFTypeRef, attribute: &str) -> CFTypeRef {
+        let attribute = CFString::new(attribute);
+        let mut value: CFTypeRef = ptr::null();
+        let error = AXUIElementCopyAttributeValue(
+            element as _,
+            attribute.as_concrete_TypeRef(),
+            &mut value,
+        );
+        if error != kAXErrorSuccess {
+            return ptr::null();
+        }
+        value
+    }
+
+    /// Takes ownership of `value` and returns it as a string when it is one.
+    unsafe fn take_string(value: CFTypeRef) -> Option<String> {
+        if value.is_null() {
+            return None;
+        }
+        if CFGetTypeID(value) != CFString::type_id() {
+            CFRelease(value);
+            return None;
+        }
+        Some(CFString::wrap_under_create_rule(value as CFStringRef).to_string())
+    }
+
+    /// Reads an attribute of the system-wide element, such as the focused
+    /// field or app. The caller owns the result.
+    unsafe fn copy_system_attribute(attribute: &str) -> CFTypeRef {
+        let system = AXUIElementCreateSystemWide();
+        if system.is_null() {
+            return ptr::null();
+        }
+        AXUIElementSetMessagingTimeout(system, MESSAGING_TIMEOUT);
+        let value = copy_attribute(system as CFTypeRef, attribute);
+        CFRelease(system as CFTypeRef);
+        value
+    }
+
+    /// Cursor position in UTF-16 units, taken from the start of the selection.
+    unsafe fn cursor_utf16_offset(element: CFTypeRef) -> Option<usize> {
+        let range_value = copy_attribute(element, kAXSelectedTextRangeAttribute);
+        if range_value.is_null() {
+            return None;
+        }
+        let mut range = CFRange {
+            location: 0,
+            length: 0,
+        };
+        let read = AXValueGetValue(
+            range_value as AXValueRef,
+            kAXValueTypeCFRange,
+            &mut range as *mut _ as *mut c_void,
+        );
+        CFRelease(range_value);
+        (read && range.location >= 0).then_some(range.location as usize)
+    }
+
+    /// Reads the whole text up to the cursor; `limit_tail` trims it. Returns
+    /// the whole field when the cursor position is unknown.
+    pub fn text_before_cursor(_lines: usize) -> Option<String> {
+        unsafe {
+            let focused = copy_system_attribute(kAXFocusedUIElementAttribute);
+            if focused.is_null() {
+                return None;
+            }
+            let Some(text) = take_string(copy_attribute(focused, kAXValueAttribute)) else {
+                CFRelease(focused);
+                return None;
+            };
+            let cursor = cursor_utf16_offset(focused);
+            CFRelease(focused);
+            Some(match cursor {
+                Some(offset) => {
+                    let units: Vec<u16> = text.encode_utf16().collect();
+                    String::from_utf16_lossy(&units[..offset.min(units.len())])
+                }
+                None => text,
+            })
+        }
+    }
+
+    pub fn foreground_app_name() -> Option<String> {
+        unsafe {
+            let app = copy_system_attribute(AX_FOCUSED_APPLICATION);
+            if app.is_null() {
+                return None;
+            }
+            let title = copy_attribute(app, AX_TITLE);
+            CFRelease(app);
+            take_string(title)
+        }
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+mod platform {
+    pub fn text_before_cursor(_lines: usize) -> Option<String> {
+        None
+    }
+
+    pub fn foreground_app_name() -> Option<String> {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn limits(paragraphs: usize, lines: usize, characters: usize) -> ContextLimits {
+        ContextLimits {
+            paragraphs,
+            lines,
+            characters,
+        }
+    }
+
+    #[test]
+    fn no_limits_keep_the_text_as_is() {
+        assert_eq!(limit_tail("a\r\nb", limits(0, 0, 0)), "a\r\nb");
+    }
+
+    #[test]
+    fn character_limit_counts_characters_not_bytes() {
+        assert_eq!(limit_tail("hello world", limits(0, 0, 5)), "world");
+        assert_eq!(limit_tail("áéíó", limits(0, 0, 2)), "íó");
+        assert_eq!(limit_tail("hi", limits(0, 0, 50)), "hi");
+    }
+
+    #[test]
+    fn line_limit_keeps_the_last_lines() {
+        assert_eq!(limit_tail("l1\nl2\nl3\nl4", limits(0, 2, 0)), "l3\nl4");
+        assert_eq!(limit_tail("l1\r\nl2\r\nl3", limits(0, 2, 0)), "l2\nl3");
+        assert_eq!(limit_tail("l1\nl2", limits(0, 5, 0)), "l1\nl2");
+    }
+
+    #[test]
+    fn paragraph_limit_treats_a_run_of_blank_lines_as_one_break() {
+        assert_eq!(limit_tail("p1\n\np2\n\np3", limits(1, 0, 0)), "p3");
+        assert_eq!(limit_tail("p1\n\np2\n\np3", limits(2, 0, 0)), "p2\n\np3");
+        assert_eq!(limit_tail("p1\r\n\r\np2", limits(1, 0, 0)), "p2");
+        assert_eq!(limit_tail("p1\n\n\np2", limits(1, 0, 0)), "p2");
+        assert_eq!(limit_tail("p1\n\n\np2", limits(2, 0, 0)), "p1\n\n\np2");
+        assert_eq!(limit_tail("l1\nl2", limits(1, 0, 0)), "l1\nl2");
+    }
+
+    #[test]
+    fn the_strictest_limit_wins() {
+        assert_eq!(limit_tail("aaaa\nbbbb\ncccc", limits(0, 2, 4)), "cccc");
+    }
 }

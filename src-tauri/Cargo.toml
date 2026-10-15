@@ -78,7 +78,7 @@ sha2 = "0.10"
 # Whisper-family models run through transcribe-cpp (GGUF/ggml, native backends);
 # transcribe-rs is ONNX-only (Parakeet, Moonshine, SenseVoice, GigaAM,
 # Canary, Cohere). Per-platform backend features are added in the target tables.
-transcribe-rs = { version = "0.3.11", features = ["onnx", "ort-cuda"] }
+transcribe-rs = { version = "0.3.11", features = ["onnx"] }
 transcribe-cpp = { version = "0.2.4", default-features = false }
 handy-keys = "0.3.4"
 ferrous-opencc = "0.2.3"
@@ -101,6 +101,8 @@ tauri-plugin-single-instance = "2.3.2"
 tauri-plugin-updater = "2.10.1"
 
 [target.'cfg(windows)'.dependencies]
+# Handy+ needs the CUDA execution provider for ONNX models on Windows.
+transcribe-rs = { version = "0.3.11", features = ["ort-cuda"] }
 sysinfo = { version = "0.33", default-features = false, features = ["system"] }
 uiautomation = "0.25"
 # Used to reach ICoreWebView2Settings3 through the webview's controller
@@ -145,6 +147,9 @@ transcribe-cpp = { version = "0.2.4", default-features = false, features = [
 transcribe-cpp = { version = "0.2.4", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+accessibility-sys = "0.2"
+core-foundation = "0.10"
+karabiner-input = { git = "https://github.com/falleng0d/karabiner-input", rev = "5e4f238e58b2a8d84104afd3a1148baeae733284", version = "0.1.0" }
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }
 transcribe-cpp = { version = "0.2.4", default-features = false, features = ["metal"] }
 # Used by the receipt-sequenced ("reliable") paste path for lazy NSPasteboard

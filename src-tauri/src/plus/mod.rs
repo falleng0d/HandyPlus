@@ -4,6 +4,8 @@
 pub mod commands;
 pub mod context;
 pub mod dragon;
+#[cfg(target_os = "macos")]
+pub mod karabiner;
 pub mod languages;
 pub mod overlay;
 pub mod paste;

@@ -33,6 +33,18 @@ export const plusSettingUpdaters: {
     unwrapOrToast(
       commands.changeContextMaxCharactersSetting(value as number | null),
     ),
+  context_max_paragraphs: (value) =>
+    unwrapOrToast(commands.changeContextMaxParagraphsSetting(value as number)),
+  lowercase_first_letter: (value) =>
+    unwrapOrToast(commands.changeLowercaseFirstLetterSetting(value as boolean)),
+  continuation_lowercase: (value) =>
+    unwrapOrToast(
+      commands.changeContinuationLowercaseSetting(value as boolean),
+    ),
+  remove_trailing_punctuation: (value) =>
+    unwrapOrToast(
+      commands.changeRemoveTrailingPunctuationSetting(value as boolean),
+    ),
   lower_volume_while_recording: (value) =>
     unwrapOrToast(
       commands.changeLowerVolumeWhileRecordingSetting(value as boolean),
