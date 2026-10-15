@@ -16,6 +16,9 @@ pub fn started(app: &AppHandle) {
     }
     let settings = get_settings(app);
     run_script(&settings.on_recording_start_script, "recording start");
+    if settings.pause_dragon_when_dictating {
+        crate::plus::dragon::pause(app.clone());
+    }
 }
 
 /// The microphone delivers samples and the start sound has played.
@@ -37,6 +40,9 @@ pub fn ended(app: &AppHandle) {
     }
     let settings = get_settings(app);
     run_script(&settings.on_recording_end_script, "recording end");
+    if settings.pause_dragon_when_dictating {
+        crate::plus::dragon::resume(app.clone());
+    }
 }
 
 fn run_script(script: &str, context: &'static str) {

@@ -409,8 +409,8 @@
         "description": "Give up on a transcription that takes longer than this and keep the recording in History for a retry. 0 waits forever."
       },
       "recordingSession": {
-        "title": "Recording Scripts",
-        "description": "PowerShell 7 (pwsh) commands run in the background when a recording starts and ends.",
+        "title": "Recording Session",
+        "description": "Actions that run when a recording starts and ends. Scripts are PowerShell 7 (pwsh) commands run in the background.",
         "placeholder": "e.g. Stop-Process -Name Spotify",
         "startScript": {
           "title": "On Recording Start",
@@ -419,6 +419,10 @@
         "endScript": {
           "title": "On Recording End",
           "description": "Runs when recording stops or is cancelled."
+        },
+        "pauseDragon": {
+          "title": "Pause Dragon While Dictating",
+          "description": "Turn Dragon NaturallySpeaking's microphone off while recording and back on afterwards."
         }
       },
       "vadTuning": {

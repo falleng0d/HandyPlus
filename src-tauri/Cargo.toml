@@ -101,6 +101,7 @@ tauri-plugin-single-instance = "2.3.2"
 tauri-plugin-updater = "2.10.1"
 
 [target.'cfg(windows)'.dependencies]
+sysinfo = { version = "0.33", default-features = false, features = ["system"] }
 uiautomation = "0.25"
 # Used to reach ICoreWebView2Settings3 through the webview's controller
 # (disabling browser accelerator keys in the main window). Must match the

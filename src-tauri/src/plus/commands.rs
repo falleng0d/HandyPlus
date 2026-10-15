@@ -101,6 +101,16 @@ pub fn change_volume_while_recording_setting(app: AppHandle, volume: f32) -> Res
 
 #[tauri::command]
 #[specta::specta]
+pub fn change_pause_dragon_when_dictating_setting(
+    app: AppHandle,
+    enabled: bool,
+) -> Result<(), String> {
+    update_settings(&app, |s| s.pause_dragon_when_dictating = enabled);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn change_typing_interval_ms_setting(app: AppHandle, interval_ms: u64) -> Result<(), String> {
     update_settings(&app, |s| s.typing_interval_ms = interval_ms);
     Ok(())

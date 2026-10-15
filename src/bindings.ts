@@ -975,6 +975,14 @@ async changeTypingIntervalMsSetting(intervalMs: number) : Promise<Result<null, s
     else return { status: "error", error: e  as any };
 }
 },
+async changePauseDragonWhenDictatingSetting(enabled: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_pause_dragon_when_dictating_setting", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async changeLowerVolumeWhileRecordingSetting(enabled: boolean) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("change_lower_volume_while_recording_setting", { enabled }) };
@@ -1119,7 +1127,7 @@ vad_backend?: VadBackend;
  * not gated on this — that follows model capability. Migrated from the old
  * `overlay_position` (position `none` → style `None`).
  */
-overlay_style?: OverlayStyle; vad_threshold: number; vad_prefill_ms: number; vad_hangover_ms: number; vad_onset_ms: number; context_lines: number; context_max_characters: number | null; typing_interval_ms: number; on_recording_start_script: string; on_recording_end_script: string; custom_word_correction_enabled: boolean; transcription_timeout_secs: number; post_process_timeout_secs: number; lower_volume_while_recording: boolean; volume_while_recording: number }
+overlay_style?: OverlayStyle; vad_threshold: number; vad_prefill_ms: number; vad_hangover_ms: number; vad_onset_ms: number; context_lines: number; context_max_characters: number | null; typing_interval_ms: number; on_recording_start_script: string; on_recording_end_script: string; custom_word_correction_enabled: boolean; transcription_timeout_secs: number; post_process_timeout_secs: number; lower_volume_while_recording: boolean; volume_while_recording: number; pause_dragon_when_dictating: boolean }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { transcribe: string[]; ort: string[]; gpu_devices: GpuDeviceOption[] }

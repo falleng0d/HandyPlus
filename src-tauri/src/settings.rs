@@ -547,6 +547,7 @@ pub struct AppSettings {
     pub post_process_timeout_secs: u32,
     pub lower_volume_while_recording: bool,
     pub volume_while_recording: f32,
+    pub pause_dragon_when_dictating: bool,
 }
 
 fn default_model() -> String {
@@ -1018,6 +1019,7 @@ pub fn get_default_settings() -> AppSettings {
         post_process_timeout_secs: crate::settings_plus::DEFAULT_POST_PROCESS_TIMEOUT_SECS,
         lower_volume_while_recording: false,
         volume_while_recording: crate::settings_plus::DEFAULT_VOLUME_WHILE_RECORDING,
+        pause_dragon_when_dictating: false,
     }
 }
 

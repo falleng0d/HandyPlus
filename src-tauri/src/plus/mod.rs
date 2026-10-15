@@ -3,6 +3,7 @@
 
 pub mod commands;
 pub mod context;
+pub mod dragon;
 pub mod overlay;
 pub mod paste;
 pub mod prompt;

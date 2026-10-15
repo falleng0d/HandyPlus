@@ -37,6 +37,10 @@ export const plusSettingUpdaters: {
     ),
   volume_while_recording: (value) =>
     unwrapOrToast(commands.changeVolumeWhileRecordingSetting(value as number)),
+  pause_dragon_when_dictating: (value) =>
+    unwrapOrToast(
+      commands.changePauseDragonWhenDictatingSetting(value as boolean),
+    ),
   typing_interval_ms: (value) =>
     unwrapOrToast(commands.changeTypingIntervalMsSetting(value as number)),
   on_recording_start_script: (value) =>
