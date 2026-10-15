@@ -379,6 +379,8 @@ pub struct AppSettings {
     /// treated as version 0 and migrated forward.
     #[serde(default = "default_settings_schema_version")]
     pub settings_schema_version: u32,
+    #[serde(default = "crate::settings_plus::default_plus_settings_version")]
+    pub plus_settings_version: u32,
     /// Defaults to empty on partial stores; the load path merges in the
     /// default bindings for any missing keys before the settings are used.
     #[serde(default)]
@@ -923,6 +925,7 @@ pub fn get_default_settings() -> AppSettings {
 
     AppSettings {
         settings_schema_version: default_settings_schema_version(),
+        plus_settings_version: crate::settings_plus::default_plus_settings_version(),
         bindings,
         shortcut_activation: ShortcutActivation::default(),
         hold_threshold_ms: default_hold_threshold_ms(),
@@ -1111,7 +1114,7 @@ fn salvage_settings(stored: &serde_json::Value) -> AppSettings {
     })
 }
 
-fn apply_settings_migrations(
+pub(crate) fn apply_settings_migrations(
     settings: &mut AppSettings,
     settings_value: &serde_json::Value,
 ) -> bool {
@@ -1213,6 +1216,10 @@ fn apply_settings_migrations(
         } else {
             OverlayStyle::Live
         };
+        updated = true;
+    }
+
+    if crate::settings_plus::apply_plus_migrations(settings, settings_value) {
         updated = true;
     }
 
@@ -1736,6 +1743,7 @@ mod tests {
 
         let raw = serde_json::json!({
             "settings_schema_version": CURRENT_SETTINGS_SCHEMA_VERSION,
+            "plus_settings_version": crate::settings_plus::CURRENT_PLUS_SETTINGS_VERSION,
             "onboarding_completed": false,
             "whats_new_last_seen_version": default_whats_new_last_seen_version(),
             "overlay_style": "live",
