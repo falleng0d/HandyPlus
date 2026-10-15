@@ -387,6 +387,25 @@
         "title": "Voice Activity Detection",
         "description": "Filter silence from recordings. Streaming-capable models use a longer VAD tail; disabling VAD records raw audio."
       },
+      "vadTuning": {
+        "milliseconds": "ms",
+        "threshold": {
+          "title": "Speech Threshold",
+          "description": "Silero speech probability (0 to 1) above which audio counts as speech. Raise it if background noise gets transcribed."
+        },
+        "prefill": {
+          "title": "Speech Prefill",
+          "description": "Audio kept from just before speech is detected, so the first syllable isn't cut."
+        },
+        "hangover": {
+          "title": "Speech Hangover",
+          "description": "Audio kept after speech stops, so pauses between words stay in the recording."
+        },
+        "onset": {
+          "title": "Speech Onset",
+          "description": "How long speech must last before recording starts keeping audio. Raise it to ignore short clicks."
+        }
+      },
       "vadBackend": {
         "title": "Voice Activity Backend",
         "description": "Choose the detector used to filter silence. Earshot is experimental; switch back to Silero if speech is clipped or noise is retained.",

@@ -58,6 +58,7 @@ fn resampler_frame_size_follows_the_vad_backend() {
         Some(Arc::new(move |frame: &[f32]| {
             observed.lock().unwrap().push(frame.len())
         })),
+        None,
         Instant::now(),
     );
 
@@ -70,9 +71,58 @@ fn resampler_frame_size_follows_the_vad_backend() {
     assert_eq!(*frame_lengths.lock().unwrap(), vec![frame_samples; 4]);
 }
 
+/// Marks a 480-sample frame as speech when its first sample is loud.
+struct LoudFrameVad;
+
+impl VoiceActivityDetector for LoudFrameVad {
+    fn push_frame<'a>(&'a mut self, frame: &'a [f32]) -> anyhow::Result<VadFrame<'a>> {
+        Ok(if frame[0] > 0.5 {
+            VadFrame::Speech(frame)
+        } else {
+            VadFrame::Noise
+        })
+    }
+
+    fn frame_samples(&self) -> usize {
+        480
+    }
+}
+
+#[test]
+fn speech_state_callback_reports_only_transitions() {
+    let vad = VadConfig {
+        detector: Arc::new(Mutex::new(Box::new(LoudFrameVad))),
+        frame_samples: 480,
+        offline_hangover_frames: 0,
+        streaming_hangover_frames: 0,
+    };
+    let states = Arc::new(Mutex::new(Vec::new()));
+    let observed = Arc::clone(&states);
+    let mut processor = CaptureProcessor::new(
+        16_000,
+        Some(vad),
+        None,
+        None,
+        Some(Arc::new(move |active: bool| {
+            observed.lock().unwrap().push(active)
+        })),
+        Instant::now(),
+    );
+
+    let (ready_tx, _ready_rx) = mpsc::channel();
+    processor.begin_recording(VadPolicy::Offline, ready_tx);
+    processor.process_raw_chunk(&[0.0; 960], ChunkDisposition::Capture);
+    processor.process_raw_chunk(&[1.0; 1440], ChunkDisposition::Capture);
+    processor.process_raw_chunk(&[0.0; 960], ChunkDisposition::Capture);
+    processor.process_raw_chunk(&[1.0; 480], ChunkDisposition::Capture);
+    processor.finish_recording();
+
+    assert_eq!(*states.lock().unwrap(), vec![true, false, true, false]);
+}
+
 #[test]
 fn idle_chunks_are_discarded_without_reaching_the_recording() {
-    let mut processor = CaptureProcessor::new(16_000, None, None, None, Instant::now());
+    let mut processor = CaptureProcessor::new(16_000, None, None, None, None, Instant::now());
     processor.process_raw_chunk(&[1.0; 480], ChunkDisposition::Discard);
     assert!(processor.finish_recording().is_empty());
 }
@@ -84,7 +134,7 @@ fn shutdown_is_processed_without_audio_samples() {
     let (done_tx, done_rx) = mpsc::channel();
     let worker = thread::spawn(move || {
         run_consumer(
-            CaptureProcessor::new(48_000, None, None, None, Instant::now()),
+            CaptureProcessor::new(48_000, None, None, None, None, Instant::now()),
             consumer,
             cmd_rx,
             Arc::new(CaptureTransportState::default()),
@@ -248,6 +298,7 @@ fn repeated_start_stop_cycles_resume_capture_without_leaking_samples() {
             Some(Arc::new(move |frame: &[f32]| {
                 streamed_cb.lock().unwrap().extend_from_slice(frame)
             })),
+            None,
             Instant::now(),
         );
         run_consumer(
@@ -356,7 +407,7 @@ fn missing_callback_at_stop_marks_stream_for_rebuild_and_returns_samples() {
     let worker_transport = Arc::clone(&transport);
     let worker = thread::spawn(move || {
         run_consumer(
-            CaptureProcessor::new(16_000, None, None, None, Instant::now()),
+            CaptureProcessor::new(16_000, None, None, None, None, Instant::now()),
             consumer,
             cmd_rx,
             worker_transport,

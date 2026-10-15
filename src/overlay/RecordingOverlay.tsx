@@ -2,6 +2,7 @@ import { listen } from "@tauri-apps/api/event";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "./RecordingOverlay.css";
+import "./RecordingOverlayPlus.css";
 import { commands, events } from "@/bindings";
 import type {
   StreamPhase,
@@ -24,6 +25,7 @@ const RecordingOverlay: React.FC = () => {
   // Stay visually in an arming state until the backend processes the first
   // actual microphone sample chunk.
   const [captureReady, setCaptureReady] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const [levels, setLevels] = useState<number[]>(Array(WAVE_BARS).fill(0));
   const [streamText, setStreamText] = useState<StreamTextEvent>({
     committed: "",
@@ -58,6 +60,7 @@ const RecordingOverlay: React.FC = () => {
         // them would overwrite that event and leave the overlay stuck arming.
         if (overlayState === "recording" || overlayState === "streaming") {
           setCaptureReady(false);
+          setSpeaking(false);
           smoothedLevelsRef.current = Array(16).fill(0);
           setLevels(Array(WAVE_BARS).fill(0));
           setStreamText({ committed: "", tentative: "" });
@@ -88,6 +91,11 @@ const RecordingOverlay: React.FC = () => {
       const unlistenHide = await listen("hide-overlay", () => {
         setIsVisible(false);
         setCaptureReady(false);
+        setSpeaking(false);
+      });
+
+      const unlistenSpeaking = await listen<boolean>("vad-active", (event) => {
+        setSpeaking(Boolean(event.payload));
       });
 
       const unlistenReady = await listen("recording-ready", () => {
@@ -120,6 +128,7 @@ const RecordingOverlay: React.FC = () => {
       return () => {
         unlistenShow();
         unlistenHide();
+        unlistenSpeaking();
         unlistenReady();
         unlistenLevel();
         unlistenStream();
@@ -167,7 +176,9 @@ const RecordingOverlay: React.FC = () => {
 
   // ---- Shared building blocks (one visual language for every overlay form) ----
   const waveform = (
-    <div className={`swave ${captureReady ? "ready" : "arming"}`}>
+    <div
+      className={`swave ${captureReady ? "ready" : "arming"} ${speaking ? "speaking" : ""}`}
+    >
       {levels.map((v, i) => (
         <i
           key={i}
@@ -201,7 +212,9 @@ const RecordingOverlay: React.FC = () => {
   const listeningRow = (showTimer: boolean, showCancel: boolean) => (
     <div className="sbase">
       <div className="sbase-l">
-        <span className={`sdot ${captureReady ? "ready" : "arming"}`} />
+        <span
+          className={`sdot ${captureReady ? "ready" : "arming"} ${speaking ? "speaking" : ""}`}
+        />
       </div>
       {waveform}
       <div className="sbase-r">
@@ -285,9 +298,7 @@ const RecordingOverlay: React.FC = () => {
       : t("overlay.transcribing");
 
   return (
-    <div
-      className={`ov-stage ${position} ov-fade ${isVisible ? "show" : ""}`}
-    >
+    <div className={`ov-stage ${position} ov-fade ${isVisible ? "show" : ""}`}>
       <div
         className={`scard compact ${working && isVisible ? "cworking" : ""}`}
       >

@@ -530,6 +530,13 @@ pub struct AppSettings {
     /// `overlay_position` (position `none` → style `None`).
     #[serde(default = "default_overlay_style")]
     pub overlay_style: OverlayStyle,
+
+    // Handy+ fields. Their defaults come from get_default_settings and their
+    // migrations live in settings_plus.rs.
+    pub vad_threshold: f32,
+    pub vad_prefill_ms: u64,
+    pub vad_hangover_ms: u64,
+    pub vad_onset_ms: u64,
 }
 
 fn default_model() -> String {
@@ -987,6 +994,10 @@ pub fn get_default_settings() -> AppSettings {
         vad_enabled: default_vad_enabled(),
         vad_backend: VadBackend::default(),
         overlay_style: default_overlay_style(),
+        vad_threshold: crate::settings_plus::DEFAULT_VAD_THRESHOLD,
+        vad_prefill_ms: crate::audio_toolkit::vad::VAD_PREFILL_MS,
+        vad_hangover_ms: crate::audio_toolkit::vad::VAD_OFFLINE_HANGOVER_MS,
+        vad_onset_ms: crate::audio_toolkit::vad::VAD_ONSET_MS,
     }
 }
 

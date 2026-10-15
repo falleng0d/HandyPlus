@@ -84,6 +84,9 @@ impl VadConfig {
 /// policy while recording. Used to feed a live streaming transcription as audio arrives.
 pub type AudioFrameCallback = Arc<dyn Fn(&[f32]) + Send + Sync + 'static>;
 pub type LevelCallback = Arc<dyn Fn(Vec<f32>) + Send + Sync + 'static>;
+/// Called with `true` when the active capture policy starts passing speech
+/// and `false` when it stops; never called twice with the same value.
+pub type SpeechStateCallback = Arc<dyn Fn(bool) + Send + Sync + 'static>;
 
 pub struct AudioRecorder {
     device: Option<Device>,
@@ -92,6 +95,7 @@ pub struct AudioRecorder {
     vad: Option<VadConfig>,
     level_cb: Option<LevelCallback>,
     audio_cb: Option<AudioFrameCallback>,
+    speech_cb: Option<SpeechStateCallback>,
     /// Which input channel to use. None = average all (original behavior).
     selected_channel: Option<usize>,
     /// Preferred stream config cached per device name. The two HAL property
@@ -114,6 +118,7 @@ impl AudioRecorder {
             vad: None,
             level_cb: None,
             audio_cb: None,
+            speech_cb: None,
             selected_channel: None,
             config_cache: Arc::new(Mutex::new(None)),
             stream_error: Arc::new(AtomicBool::new(false)),
@@ -160,6 +165,14 @@ impl AudioRecorder {
         self
     }
 
+    pub fn with_speech_state_callback<F>(mut self, cb: F) -> Self
+    where
+        F: Fn(bool) + Send + Sync + 'static,
+    {
+        self.speech_cb = Some(Arc::new(cb));
+        self
+    }
+
     pub fn with_selected_channel(mut self, channel: Option<u16>) -> Self {
         self.set_selected_channel(channel);
         self
@@ -197,6 +210,7 @@ impl AudioRecorder {
         let level_cb = self.level_cb.clone();
         // Move the optional real-time audio frame callback into the worker thread
         let audio_cb = self.audio_cb.clone();
+        let speech_cb = self.speech_cb.clone();
         let selected_channel = self.selected_channel;
         let config_cache = Arc::clone(&self.config_cache);
         let stream_error = Arc::clone(&self.stream_error);
@@ -326,6 +340,7 @@ impl AudioRecorder {
                         vad,
                         level_cb,
                         audio_cb,
+                        speech_cb,
                         stream_running_at,
                     );
                     run_consumer(
@@ -628,7 +643,8 @@ pub fn is_no_input_device_error(error_message: &str) -> bool {
             && normalized.contains("coreaudio"))
 }
 
-/// Route one 16 kHz frame through VAD to recording and live outputs.
+/// Route one 16 kHz frame through VAD to recording and live outputs, and
+/// report whether the frame was passed on as speech.
 /// Kept free-standing to permit disjoint borrows around resampler callbacks.
 fn handle_frame(
     samples: &[f32],
@@ -636,7 +652,7 @@ fn handle_frame(
     vad: &Option<VadConfig>,
     audio_cb: &Option<AudioFrameCallback>,
     out_buf: &mut Vec<f32>,
-) {
+) -> bool {
     let mut emit = |buf: &[f32]| {
         out_buf.extend_from_slice(buf);
         if let Some(cb) = audio_cb {
@@ -646,7 +662,7 @@ fn handle_frame(
 
     if vad_policy == VadPolicy::Disabled {
         emit(samples);
-        return;
+        return true;
     }
 
     if let Some(cfg) = vad {
@@ -655,11 +671,24 @@ fn handle_frame(
             .push_frame(samples)
             .unwrap_or(VadFrame::Speech(samples))
         {
-            VadFrame::Speech(buf) => emit(buf),
-            VadFrame::Noise => {}
+            VadFrame::Speech(buf) => {
+                emit(buf);
+                true
+            }
+            VadFrame::Noise => false,
         }
     } else {
         emit(samples);
+        true
+    }
+}
+
+fn set_speech_state(active: &mut bool, callback: &Option<SpeechStateCallback>, next: bool) {
+    if *active != next {
+        *active = next;
+        if let Some(callback) = callback {
+            callback(next);
+        }
     }
 }
 
@@ -704,6 +733,7 @@ struct CaptureProcessor {
     vad: Option<VadConfig>,
     level_cb: Option<LevelCallback>,
     audio_cb: Option<AudioFrameCallback>,
+    speech_cb: Option<SpeechStateCallback>,
     stream_running_at: Instant,
     visualizer: AudioVisualiser,
     frame_resampler: FrameResampler,
@@ -712,6 +742,7 @@ struct CaptureProcessor {
 
     // ---- recording-scoped: reset by `begin_recording` ------------------- //
     vad_policy: VadPolicy,
+    speech_active: bool,
     processed_samples: Vec<f32>,
     awaiting_first_captured_chunk: Option<Instant>,
     capture_ready_tx: Option<mpsc::Sender<()>>,
@@ -725,6 +756,7 @@ impl CaptureProcessor {
         vad: Option<VadConfig>,
         level_cb: Option<LevelCallback>,
         audio_cb: Option<AudioFrameCallback>,
+        speech_cb: Option<SpeechStateCallback>,
         stream_running_at: Instant,
     ) -> Self {
         // Resample into frames sized for the active VAD backend (30 ms when
@@ -757,12 +789,14 @@ impl CaptureProcessor {
             vad,
             level_cb,
             audio_cb,
+            speech_cb,
             stream_running_at,
             visualizer,
             frame_resampler,
             max_drain_samples,
             first_chunk_logged: false,
             vad_policy: VadPolicy::Offline,
+            speech_active: false,
             processed_samples: Vec::new(),
             awaiting_first_captured_chunk: None,
             capture_ready_tx: None,
@@ -778,6 +812,7 @@ impl CaptureProcessor {
         self.total_dropped_samples = 0;
         self.overrun_warning_logged = false;
         self.vad_policy = policy;
+        set_speech_state(&mut self.speech_active, &self.speech_cb, false);
         self.processed_samples.clear();
         self.visualizer.reset();
         self.frame_resampler.reset();
@@ -829,13 +864,14 @@ impl CaptureProcessor {
 
         let vad_policy = self.vad_policy;
         self.frame_resampler.push(raw, |frame: &[f32]| {
-            handle_frame(
+            let speaking = handle_frame(
                 frame,
                 vad_policy,
                 &self.vad,
                 &self.audio_cb,
                 &mut self.processed_samples,
-            )
+            );
+            set_speech_state(&mut self.speech_active, &self.speech_cb, speaking);
         });
 
         if let Some(started) = self.awaiting_first_captured_chunk.take() {
@@ -878,8 +914,9 @@ impl CaptureProcessor {
                 &self.vad,
                 &self.audio_cb,
                 &mut self.processed_samples,
-            )
+            );
         });
+        set_speech_state(&mut self.speech_active, &self.speech_cb, false);
 
         // Diagnostic for VAD audio still withheld when capture stopped; it is
         // not conclusive in either direction.

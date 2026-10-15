@@ -16,6 +16,7 @@ mod managers;
 mod memory;
 mod overlay;
 mod paste_tx;
+mod plus;
 pub mod portable;
 mod secure_input;
 mod settings;
@@ -766,6 +767,10 @@ pub fn run(cli_args: CliArgs) {
             commands::history::update_history_limit,
             commands::history::update_recording_retention_period,
             helpers::clamshell::is_laptop,
+            plus::commands::change_vad_threshold_setting,
+            plus::commands::change_vad_prefill_ms_setting,
+            plus::commands::change_vad_hangover_ms_setting,
+            plus::commands::change_vad_onset_ms_setting,
         ])
         .events(collect_events![
             managers::history::HistoryUpdatePayload,

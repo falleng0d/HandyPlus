@@ -12,6 +12,7 @@ import type {
 } from "@/bindings";
 import { commands } from "@/bindings";
 import { toast } from "sonner";
+import { plusSettingUpdaters } from "./plusSettingUpdaters";
 
 interface SettingsStore {
   settings: Settings | null;
@@ -83,6 +84,7 @@ const DEFAULT_AUDIO_DEVICE: AudioDevice = {
 const settingUpdaters: {
   [K in keyof Settings]?: (value: Settings[K]) => Promise<unknown>;
 } = {
+  ...plusSettingUpdaters,
   always_on_microphone: (value) =>
     commands.updateMicrophoneMode(value as boolean),
   audio_feedback: (value) =>

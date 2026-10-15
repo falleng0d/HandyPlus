@@ -1,9 +1,6 @@
 use crate::audio_toolkit::{
     list_input_devices,
-    vad::{
-        frames_for_duration_ms, EarshotVad, SmoothedVad, VAD_OFFLINE_HANGOVER_MS, VAD_ONSET_MS,
-        VAD_PREFILL_MS, VAD_STREAMING_HANGOVER_MS,
-    },
+    vad::{frames_for_duration_ms, EarshotVad, SmoothedVad, VAD_STREAMING_HANGOVER_MS},
     AudioRecorder, SileroVad, VadPolicy, VoiceActivityDetector,
 };
 use crate::helpers::clamshell;
@@ -17,7 +14,6 @@ use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager};
 
 const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
-const SILERO_VAD_THRESHOLD: f32 = 0.3;
 const EARSHOT_VAD_THRESHOLD: f32 = 0.5;
 
 fn set_mute(mute: bool) {
@@ -283,6 +279,7 @@ fn create_audio_recorder(
     selected_channel: Option<u16>,
     stream_router: Arc<StreamRouter>,
 ) -> Result<AudioRecorder, anyhow::Error> {
+    let settings = get_settings(app_handle);
     let detector: Box<dyn VoiceActivityDetector> = match backend {
         VadBackend::Silero => {
             let vad_path = app_handle
@@ -293,7 +290,7 @@ fn create_audio_recorder(
                 )
                 .map_err(|e| anyhow::anyhow!("Failed to resolve VAD path: {e}"))?;
             Box::new(
-                SileroVad::new(vad_path, SILERO_VAD_THRESHOLD)
+                SileroVad::new(vad_path, settings.vad_threshold)
                     .map_err(|e| anyhow::anyhow!("Failed to create SileroVad: {e}"))?,
             )
         }
@@ -307,11 +304,11 @@ fn create_audio_recorder(
     // time-based capture profile to each detector's frame size so selecting a
     // backend does not shorten pre-roll, onset, or post-speech audio.
     let frame_samples = detector.frame_samples();
-    let prefill_frames = frames_for_duration_ms(VAD_PREFILL_MS, frame_samples);
-    let offline_hangover_frames = frames_for_duration_ms(VAD_OFFLINE_HANGOVER_MS, frame_samples);
+    let prefill_frames = frames_for_duration_ms(settings.vad_prefill_ms, frame_samples);
+    let offline_hangover_frames = frames_for_duration_ms(settings.vad_hangover_ms, frame_samples);
     let streaming_hangover_frames =
         frames_for_duration_ms(VAD_STREAMING_HANGOVER_MS, frame_samples);
-    let onset_frames = frames_for_duration_ms(VAD_ONSET_MS, frame_samples);
+    let onset_frames = frames_for_duration_ms(settings.vad_onset_ms, frame_samples);
     let smoothed_vad = SmoothedVad::new(
         detector,
         prefill_frames,
@@ -340,6 +337,10 @@ fn create_audio_recorder(
             move |levels| {
                 utils::emit_levels(&app_handle, &levels);
             }
+        })
+        .with_speech_state_callback({
+            let app_handle = app_handle.clone();
+            move |active| crate::plus::overlay::emit_speech_active(&app_handle, active)
         })
         .with_audio_callback({
             let router = stream_router;

@@ -6,6 +6,12 @@ use serde_json::Value;
 
 pub const CURRENT_PLUS_SETTINGS_VERSION: u32 = 1;
 
+pub const DEFAULT_VAD_THRESHOLD: f32 = 0.3;
+
+/// Silero frame length used by the rdev-era builds, which stored VAD timings
+/// as frame counts.
+const RDEV_ERA_VAD_FRAME_MS: u64 = 30;
+
 pub fn default_plus_settings_version() -> u32 {
     CURRENT_PLUS_SETTINGS_VERSION
 }
@@ -32,6 +38,16 @@ fn migrate_rdev_era_store(settings: &mut AppSettings, stored: &Value) {
     for binding in settings.bindings.values_mut() {
         binding.current_binding = rdev_shortcut_to_handy_keys(&binding.current_binding);
         binding.default_binding = rdev_shortcut_to_handy_keys(&binding.default_binding);
+    }
+
+    for (frames_key, ms) in [
+        ("vad_prefill_frames", &mut settings.vad_prefill_ms),
+        ("vad_hangover_frames", &mut settings.vad_hangover_ms),
+        ("vad_onset_frames", &mut settings.vad_onset_ms),
+    ] {
+        if let Some(frames) = stored.get(frames_key).and_then(Value::as_u64) {
+            *ms = frames * RDEV_ERA_VAD_FRAME_MS;
+        }
     }
 
     if stored.get("transcribe_accelerator").is_none()
@@ -198,7 +214,25 @@ mod tests {
             TranscribeAcceleratorSetting::Auto
         );
         assert_eq!(settings.transcribe_gpu_device, None);
-        assert_eq!(settings.plus_settings_version, CURRENT_PLUS_SETTINGS_VERSION);
+        assert_eq!(
+            settings.plus_settings_version,
+            CURRENT_PLUS_SETTINGS_VERSION
+        );
+    }
+
+    #[test]
+    fn rdev_era_vad_frames_become_milliseconds() {
+        let mut stored = rdev_era_store();
+        stored["vad_prefill_frames"] = 10.into();
+        stored["vad_hangover_frames"] = 20.into();
+        stored["vad_onset_frames"] = 3.into();
+
+        let settings = load(&stored);
+
+        assert!((settings.vad_threshold - 0.6).abs() < 1e-6);
+        assert_eq!(settings.vad_prefill_ms, 300);
+        assert_eq!(settings.vad_hangover_ms, 600);
+        assert_eq!(settings.vad_onset_ms, 90);
     }
 
     #[test]
@@ -245,7 +279,12 @@ mod tests {
 
     #[test]
     fn migrated_shortcuts_parse_in_handy_keys() {
-        for rdev in ["right alt", "left ctrl+f1", "meta+delete", "ctrl+shift+space"] {
+        for rdev in [
+            "right alt",
+            "left ctrl+f1",
+            "meta+delete",
+            "ctrl+shift+space",
+        ] {
             let converted = rdev_shortcut_to_handy_keys(rdev);
             assert!(
                 converted.parse::<handy_keys::Hotkey>().is_ok(),
