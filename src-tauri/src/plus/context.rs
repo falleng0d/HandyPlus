@@ -95,12 +95,13 @@ fn last_paragraphs_start(chars: &[char], count: usize) -> usize {
 
 #[cfg(windows)]
 mod platform {
-    use uiautomation::controls::{EditControl, TextControl};
+    use uiautomation::actions::Value;
+    use uiautomation::controls::{DocumentControl, EditControl, TextControl};
     use uiautomation::types::{TextPatternRangeEndpoint, TextUnit};
     use uiautomation::UIAutomation;
 
     fn read_before_cursor<T: uiautomation::actions::Text>(
-        control: T,
+        control: &T,
         lines: usize,
     ) -> uiautomation::Result<String> {
         let (_, caret) = control.get_caret_range()?;
@@ -114,16 +115,20 @@ mod platform {
         before.get_text(-1)
     }
 
-    /// Reads at most `lines` lines (0 for all) up to the cursor.
+    /// Reads at most `lines` lines (0 for all) up to the cursor. Fields without
+    /// a readable cursor give their whole value.
     pub fn text_before_cursor(lines: usize) -> Option<String> {
         let result = (|| -> uiautomation::Result<String> {
             let automation = UIAutomation::new()?;
             let focused = automation.get_focused_element()?;
             if let Ok(edit) = EditControl::try_from(&focused) {
-                return read_before_cursor(edit, lines);
+                return read_before_cursor(&edit, lines).or_else(|_| edit.get_value());
+            }
+            if let Ok(document) = DocumentControl::try_from(&focused) {
+                return read_before_cursor(&document, lines).or_else(|_| document.get_value());
             }
             let text = TextControl::try_from(focused)?;
-            read_before_cursor(text, lines)
+            read_before_cursor(&text, lines)
         })();
         result.ok()
     }
