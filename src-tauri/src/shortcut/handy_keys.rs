@@ -228,6 +228,9 @@ impl HandyKeysState {
 
     /// Register a shortcut binding
     pub fn register(&self, binding: &ShortcutBinding) -> Result<(), String> {
+        if binding.current_binding.trim().is_empty() {
+            return Ok(());
+        }
         let (tx, rx) = mpsc::channel();
         self.command_sender
             .lock()

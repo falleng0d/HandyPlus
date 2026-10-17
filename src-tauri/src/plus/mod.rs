@@ -11,6 +11,7 @@ pub mod overlay;
 pub mod paste;
 pub mod prompt;
 pub mod recording;
+pub mod shortcuts;
 pub mod text;
 pub mod timeouts;
 pub mod volume;

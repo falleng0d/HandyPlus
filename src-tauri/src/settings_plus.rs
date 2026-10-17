@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use specta::Type;
 
-pub const CURRENT_PLUS_SETTINGS_VERSION: u32 = 1;
+pub const CURRENT_PLUS_SETTINGS_VERSION: u32 = 2;
 
 pub const DEFAULT_VAD_THRESHOLD: f32 = 0.3;
 pub const DEFAULT_CONTEXT_LINES: u32 = 30;
@@ -52,6 +52,9 @@ pub fn apply_plus_migrations(settings: &mut AppSettings, stored: &Value) -> bool
             migrate_rdev_era_store(settings, stored);
         }
     }
+    if stored_version < 2 {
+        clear_transcribe_default(settings);
+    }
 
     settings.plus_settings_version = CURRENT_PLUS_SETTINGS_VERSION;
     true
@@ -78,6 +81,18 @@ fn migrate_mac_fork_store(settings: &mut AppSettings, stored: &Value) {
     }
     if let Some(characters) = limit("post_process_input_max_chars") {
         settings.context_max_characters = (characters > 0).then_some(characters);
+    }
+}
+
+/// Stores keep a copy of each default shortcut, so Reset only unassigns the
+/// transcribe shortcut once that copy matches the current default.
+fn clear_transcribe_default(settings: &mut AppSettings) {
+    let defaults = crate::settings::get_default_settings().bindings;
+    if let (Some(binding), Some(default)) = (
+        settings.bindings.get_mut("transcribe"),
+        defaults.get("transcribe"),
+    ) {
+        binding.default_binding = default.default_binding.clone();
     }
 }
 
@@ -421,6 +436,20 @@ mod tests {
             reloaded.bindings["transcribe_with_post_process"].current_binding,
             "alt_right"
         );
+    }
+
+    #[test]
+    fn version_one_store_keeps_its_transcribe_keys_but_resets_to_unassigned() {
+        let mut stored = rdev_era_store();
+        stored["plus_settings_version"] = 1.into();
+        stored["bindings"]["transcribe"]["current_binding"] = "ctrl+space".into();
+        stored["bindings"]["transcribe"]["default_binding"] = "ctrl+space".into();
+
+        let settings = load(&stored);
+
+        let transcribe = &settings.bindings["transcribe"];
+        assert_eq!(transcribe.current_binding, "ctrl+space");
+        assert_eq!(transcribe.default_binding, "");
     }
 
     #[test]

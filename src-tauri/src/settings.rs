@@ -899,14 +899,8 @@ fn ensure_post_process_defaults(settings: &mut AppSettings) -> bool {
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
-    #[cfg(target_os = "windows")]
-    let default_shortcut = "ctrl+space";
-    #[cfg(target_os = "macos")]
-    let default_shortcut = "option+space";
-    #[cfg(target_os = "linux")]
-    let default_shortcut = "ctrl+space";
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    let default_shortcut = "alt+space";
+    // Handy+ leaves the transcribe shortcut unassigned; resetting it clears it.
+    let default_shortcut = "";
 
     let mut bindings = HashMap::new();
     bindings.insert(

@@ -154,9 +154,9 @@ pub fn unregister_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<
 
 #[derive(Serialize, Type)]
 pub struct BindingResponse {
-    success: bool,
-    binding: Option<ShortcutBinding>,
-    error: Option<String>,
+    pub(crate) success: bool,
+    pub(crate) binding: Option<ShortcutBinding>,
+    pub(crate) error: Option<String>,
 }
 
 #[tauri::command]
@@ -276,6 +276,9 @@ fn restore_registration(app: &AppHandle, binding: &ShortcutBinding) {
 #[specta::specta]
 pub fn reset_binding(app: AppHandle, id: String) -> Result<BindingResponse, String> {
     let binding = settings::get_stored_binding(&settings::get_settings(&app), &id)?;
+    if binding.default_binding.trim().is_empty() {
+        return crate::plus::shortcuts::unassign(&app, binding);
+    }
     change_binding(app, id, binding.default_binding)
 }
 
@@ -442,6 +445,9 @@ fn validate_shortcut_for_implementation(
     raw: &str,
     implementation: KeyboardImplementation,
 ) -> Result<(), String> {
+    if raw.trim().is_empty() {
+        return Ok(());
+    }
     match implementation {
         KeyboardImplementation::Tauri => tauri_impl::validate_shortcut(raw),
         KeyboardImplementation::HandyKeys => handy_keys::validate_shortcut(raw),

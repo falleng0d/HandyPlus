@@ -286,7 +286,12 @@ mod tests {
             vec![config("a", "en", "ctrl+f1"), config("b", "pt", "")],
             "en",
         );
-        let transcribe = settings.bindings["transcribe"].current_binding.clone();
+        let transcribe = "ctrl+space".to_string();
+        settings
+            .bindings
+            .get_mut("transcribe")
+            .expect("default bindings include transcribe")
+            .current_binding = transcribe.clone();
         let all_new = |_: &ShortcutBinding| true;
 
         assert_eq!(taken_shortcut(&settings, all_new), None);
