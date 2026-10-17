@@ -95,42 +95,84 @@ fn last_paragraphs_start(chars: &[char], count: usize) -> usize {
 
 #[cfg(windows)]
 mod platform {
-    use uiautomation::actions::Value;
-    use uiautomation::controls::{DocumentControl, EditControl, TextControl};
+    use std::sync::mpsc;
+    use std::time::Duration;
+    use uiautomation::patterns::{UITextPattern, UITextRange, UIValuePattern};
     use uiautomation::types::{TextPatternRangeEndpoint, TextUnit};
     use uiautomation::UIAutomation;
+    use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
 
-    fn read_before_cursor<T: uiautomation::actions::Text>(
-        control: &T,
-        lines: usize,
-    ) -> uiautomation::Result<String> {
-        let (_, caret) = control.get_caret_range()?;
-        let before = caret.clone();
+    /// How long to wait for the focused app, so a hung app can't stall
+    /// transcription.
+    const READ_TIMEOUT: Duration = Duration::from_millis(500);
+
+    /// Empty range at the cursor, from the caret when the control reports it
+    /// and from the start of the selection otherwise.
+    fn cursor_range(pattern: &UITextPattern) -> Option<UITextRange> {
+        if let Ok((_, caret)) = pattern.get_caret_range() {
+            return Some(caret);
+        }
+        let selection = pattern.get_selection().ok()?.into_iter().next()?;
+        selection
+            .move_endpoint_by_range(
+                TextPatternRangeEndpoint::End,
+                &selection,
+                TextPatternRangeEndpoint::Start,
+            )
+            .ok()?;
+        Some(selection)
+    }
+
+    fn text_before(pattern: &UITextPattern, lines: usize) -> Option<String> {
+        let range = cursor_range(pattern)?;
         let lines = if lines == 0 {
             i32::MAX
         } else {
             lines.min(i32::MAX as usize) as i32
         };
-        before.move_endpoint_by_unit(TextPatternRangeEndpoint::Start, TextUnit::Line, -lines)?;
-        before.get_text(-1)
+        range
+            .move_endpoint_by_unit(TextPatternRangeEndpoint::Start, TextUnit::Line, -lines)
+            .ok()?;
+        range.get_text(-1).ok()
+    }
+
+    fn read_focused(lines: usize) -> Option<String> {
+        let automation = UIAutomation::new_direct().ok()?;
+        let focused = automation.get_focused_element().ok()?;
+        if let Ok(pattern) = focused.get_pattern::<UITextPattern>() {
+            if let Some(text) = text_before(&pattern, lines) {
+                return Some(text);
+            }
+            if let Ok(text) = pattern
+                .get_document_range()
+                .and_then(|range| range.get_text(-1))
+            {
+                return Some(text);
+            }
+        }
+        focused
+            .get_pattern::<UIValuePattern>()
+            .and_then(|pattern| pattern.get_value())
+            .ok()
     }
 
     /// Reads at most `lines` lines (0 for all) up to the cursor. Fields without
-    /// a readable cursor give their whole value.
+    /// a readable cursor give their whole text.
     pub fn text_before_cursor(lines: usize) -> Option<String> {
-        let result = (|| -> uiautomation::Result<String> {
-            let automation = UIAutomation::new()?;
-            let focused = automation.get_focused_element()?;
-            if let Ok(edit) = EditControl::try_from(&focused) {
-                return read_before_cursor(&edit, lines).or_else(|_| edit.get_value());
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let initialized = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok();
+            let text = if initialized {
+                read_focused(lines)
+            } else {
+                None
+            };
+            if initialized {
+                unsafe { CoUninitialize() };
             }
-            if let Ok(document) = DocumentControl::try_from(&focused) {
-                return read_before_cursor(&document, lines).or_else(|_| document.get_value());
-            }
-            let text = TextControl::try_from(focused)?;
-            read_before_cursor(&text, lines)
-        })();
-        result.ok()
+            let _ = sender.send(text);
+        });
+        receiver.recv_timeout(READ_TIMEOUT).ok().flatten()
     }
 
     /// File name of the foreground window's program, without `.exe`.
