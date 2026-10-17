@@ -25,8 +25,17 @@ impl ContextLimits {
 /// Text before the cursor in the focused field, trimmed to `limits`. Empty
 /// when the field can't be read. Blocks while the target app answers.
 pub fn text_before_cursor(limits: ContextLimits) -> String {
+    let started = std::time::Instant::now();
     let text = platform::text_before_cursor(limits.lines).unwrap_or_default();
-    limit_tail(&text, limits)
+    let text = limit_tail(&text, limits);
+    log::debug!(
+        "Text before the cursor in {:?} ({} chars, {} ms): {:?}",
+        foreground_app_name(),
+        text.chars().count(),
+        started.elapsed().as_millis(),
+        text
+    );
+    text
 }
 
 /// Name of the app in front, or an empty string when it can't be read.
@@ -158,21 +167,87 @@ mod platform {
     fn read_focused(lines: usize) -> Option<String> {
         let automation = UIAutomation::new_direct().ok()?;
         let focused = automation.get_focused_element().ok()?;
+        log::debug!(
+            "Focused element: {:?} {:?}",
+            focused.get_control_type(),
+            focused.get_classname()
+        );
         if let Ok(pattern) = focused.get_pattern::<UITextPattern>() {
             if let Some(text) = text_before(&pattern, lines) {
+                log::debug!("Read the text before the cursor from the text pattern");
                 return Some(text);
             }
             if let Ok(text) = pattern
                 .get_document_range()
                 .and_then(|range| range.get_text(-1))
             {
+                log::debug!("Read the whole text pattern; the cursor is unknown");
                 return Some(text);
             }
         }
-        focused
+        let value = focused
             .get_pattern::<UIValuePattern>()
             .and_then(|pattern| pattern.get_value())
-            .ok()
+            .ok();
+        log::debug!("Read the value pattern: {}", value.is_some());
+        value
+    }
+
+    /// Scintilla editors (Notepad++, Notepad4) have no UI Automation support,
+    /// but answer window messages from other processes.
+    fn scintilla_text_before_cursor() -> Option<String> {
+        use windows::Win32::Foundation::{LPARAM, WPARAM};
+        use windows::Win32::UI::WindowsAndMessaging::{
+            GetClassNameW, GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId,
+            SendMessageTimeoutW, GUITHREADINFO, SMTO_ABORTIFHUNG, WM_GETTEXT,
+        };
+        const SCI_GETCURRENTPOS: u32 = 2008;
+        const SCI_GETCODEPAGE: u32 = 2137;
+        const SC_CP_UTF8: usize = 65001;
+
+        unsafe {
+            let thread = GetWindowThreadProcessId(GetForegroundWindow(), None);
+            let mut info = GUITHREADINFO {
+                cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
+                ..Default::default()
+            };
+            GetGUIThreadInfo(thread, &mut info).ok()?;
+            let field = info.hwndFocus;
+            if field.0.is_null() {
+                return None;
+            }
+            let mut class = [0u16; 64];
+            let length = GetClassNameW(field, &mut class) as usize;
+            if String::from_utf16_lossy(&class[..length]) != "Scintilla" {
+                return None;
+            }
+            let send = |message: u32, wparam: usize, lparam: isize| -> Option<usize> {
+                let mut result = 0usize;
+                let sent = SendMessageTimeoutW(
+                    field,
+                    message,
+                    WPARAM(wparam),
+                    LPARAM(lparam),
+                    SMTO_ABORTIFHUNG,
+                    200,
+                    Some(&mut result),
+                );
+                (sent.0 != 0).then_some(result)
+            };
+            if send(SCI_GETCODEPAGE, 0, 0)? != SC_CP_UTF8 {
+                return None;
+            }
+            // A UTF-8 byte offset, never fewer than the UTF-16 units before it.
+            let cursor = send(SCI_GETCURRENTPOS, 0, 0)?;
+            let mut buffer = vec![0u16; cursor + 1];
+            let copied = send(WM_GETTEXT, buffer.len(), buffer.as_mut_ptr() as isize)?;
+            let text = String::from_utf16_lossy(&buffer[..copied.min(cursor)]);
+            let mut end = cursor.min(text.len());
+            while !text.is_char_boundary(end) {
+                end -= 1;
+            }
+            Some(text[..end].to_string())
+        }
     }
 
     /// Reads at most `lines` lines (0 for all) up to the cursor. Fields without
@@ -180,6 +255,11 @@ mod platform {
     pub fn text_before_cursor(lines: usize) -> Option<String> {
         let (sender, receiver) = mpsc::channel();
         std::thread::spawn(move || {
+            if let Some(text) = scintilla_text_before_cursor() {
+                log::debug!("Read the text before the cursor from Scintilla");
+                let _ = sender.send(Some(text));
+                return;
+            }
             let initialized = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok();
             let text = if initialized {
                 read_focused(lines)
