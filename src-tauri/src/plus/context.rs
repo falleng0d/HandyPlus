@@ -28,7 +28,7 @@ pub fn text_before_cursor(limits: ContextLimits) -> String {
     let started = std::time::Instant::now();
     let text = platform::text_before_cursor(limits.lines).unwrap_or_default();
     let text = limit_tail(&text, limits);
-    log::debug!(
+    log::trace!(
         "Text before the cursor in {:?} ({} chars, {} ms): {:?}",
         foreground_app_name(),
         text.chars().count(),
@@ -167,21 +167,21 @@ mod platform {
     fn read_focused(lines: usize) -> Option<String> {
         let automation = UIAutomation::new_direct().ok()?;
         let focused = automation.get_focused_element().ok()?;
-        log::debug!(
+        log::trace!(
             "Focused element: {:?} {:?}",
             focused.get_control_type(),
             focused.get_classname()
         );
         if let Ok(pattern) = focused.get_pattern::<UITextPattern>() {
             if let Some(text) = text_before(&pattern, lines) {
-                log::debug!("Read the text before the cursor from the text pattern");
+                log::trace!("Read the text before the cursor from the text pattern");
                 return Some(text);
             }
             if let Ok(text) = pattern
                 .get_document_range()
                 .and_then(|range| range.get_text(-1))
             {
-                log::debug!("Read the whole text pattern; the cursor is unknown");
+                log::trace!("Read the whole text pattern; the cursor is unknown");
                 return Some(text);
             }
         }
@@ -189,7 +189,7 @@ mod platform {
             .get_pattern::<UIValuePattern>()
             .and_then(|pattern| pattern.get_value())
             .ok();
-        log::debug!("Read the value pattern: {}", value.is_some());
+        log::trace!("Read the value pattern: {}", value.is_some());
         value
     }
 
@@ -256,7 +256,7 @@ mod platform {
         let (sender, receiver) = mpsc::channel();
         std::thread::spawn(move || {
             if let Some(text) = scintilla_text_before_cursor() {
-                log::debug!("Read the text before the cursor from Scintilla");
+                log::trace!("Read the text before the cursor from Scintilla");
                 let _ = sender.send(Some(text));
                 return;
             }
