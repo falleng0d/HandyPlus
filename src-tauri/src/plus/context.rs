@@ -133,6 +133,25 @@ mod platform {
         range
             .move_endpoint_by_unit(TextPatternRangeEndpoint::Start, TextUnit::Line, -lines)
             .ok()?;
+        // Chromium ranges can move past the focused field into the rest of the page.
+        let field = pattern.get_document_range().ok()?;
+        let before_field = range
+            .compare_endpoints(
+                TextPatternRangeEndpoint::Start,
+                &field,
+                TextPatternRangeEndpoint::Start,
+            )
+            .ok()?
+            < 0;
+        if before_field {
+            range
+                .move_endpoint_by_range(
+                    TextPatternRangeEndpoint::Start,
+                    &field,
+                    TextPatternRangeEndpoint::Start,
+                )
+                .ok()?;
+        }
         range.get_text(-1).ok()
     }
 
