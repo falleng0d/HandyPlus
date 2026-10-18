@@ -148,37 +148,45 @@ fn stage_onnxruntime_dll() {
     println!("cargo:warning=Staged onnxruntime.dll for Windows bundling");
 }
 
-/// Stage the ONNX Runtime DLLs Handy+ needs next to `handy.exe`: DirectML
-/// (imported by the statically linked runtime) and the CUDA execution
-/// provider. ort-sys copies them into the target dir; tauri can't bundle them
-/// from there because it copies resources into that same dir.
+/// Stage the ONNX Runtime libraries Handy+ needs next to `handy`: the CUDA
+/// execution provider, plus DirectML on Windows (imported by the statically
+/// linked runtime). ort-sys copies them into the target dir; tauri can't
+/// bundle them from there because it copies resources into that same dir.
 fn stage_ort_provider_dlls() {
     use std::path::PathBuf;
 
-    const DLLS: [&str; 3] = [
+    const WINDOWS: &[&str] = &[
         "DirectML.dll",
         "onnxruntime_providers_shared.dll",
         "onnxruntime_providers_cuda.dll",
     ];
+    const LINUX: &[&str] = &[
+        "libonnxruntime_providers_shared.so",
+        "libonnxruntime_providers_cuda.so",
+    ];
 
-    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows")
-        || std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() != Ok("x86_64")
+    if std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() != Ok("x86_64")
         || std::env::var_os("ORT_PREFER_DYNAMIC_LINK").is_some()
     {
         return;
     }
+    let dlls = match std::env::var("CARGO_CFG_TARGET_OS").as_deref() {
+        Ok("windows") => WINDOWS,
+        Ok("linux") => LINUX,
+        _ => return,
+    };
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
     let target_dir = out_dir.ancestors().nth(3).unwrap();
     let dest_dir =
         PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("transcribe-libs");
     std::fs::create_dir_all(&dest_dir).expect("create transcribe-libs staging dir");
-    for name in DLLS {
+    for name in dlls {
         let src = target_dir.join(name);
         println!("cargo:rerun-if-changed={}", src.display());
         std::fs::copy(&src, dest_dir.join(name))
             .unwrap_or_else(|e| panic!("copy {}: {e}", src.display()));
     }
-    println!("cargo:warning=Staged {} ONNX Runtime DLLs", DLLS.len());
+    println!("cargo:warning=Staged {} ONNX Runtime libraries", dlls.len());
 }
 
 /// Stage transcribe-cpp's shared runtime libraries into `transcribe-libs/` so the

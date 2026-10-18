@@ -100,9 +100,14 @@ tauri-plugin-global-shortcut = "2.3.1"
 tauri-plugin-single-instance = "2.3.2"
 tauri-plugin-updater = "2.10.1"
 
-[target.'cfg(windows)'.dependencies]
-# Handy+ needs the CUDA execution provider for ONNX models on Windows.
+# Handy+ needs the CUDA execution provider for ONNX models.
+[target.'cfg(any(windows, all(target_os = "linux", target_arch = "x86_64")))'.dependencies]
 transcribe-rs = { version = "0.3.11", features = ["ort-cuda"] }
+# Direct dependency so build.rs runs after ort-sys has copied the CUDA
+# provider libraries into the target dir; keep the version in step with ort.
+ort-sys = { version = "=2.0.0-rc.12", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
 sysinfo = { version = "0.33", default-features = false, features = ["system"] }
 uiautomation = "0.25"
 # Used to reach ICoreWebView2Settings3 through the webview's controller
@@ -123,9 +128,6 @@ windows = { version = "0.61.3", features = [
   "Win32_UI_WindowsAndMessaging",
 ] }
 winreg = "0.55"
-# Direct dependency so build.rs runs after ort-sys has copied the CUDA
-# provider DLLs into the target dir; keep the version in step with ort.
-ort-sys = { version = "=2.0.0-rc.12", default-features = false }
 
 # Whisper backend per Windows arch. x86_64 ships the Vulkan GPU backend and
 # keeps the dynamic-backends posture (loadable per-ISA CPU modules + Vulkan),
