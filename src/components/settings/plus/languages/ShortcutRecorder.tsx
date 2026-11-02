@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
-import { toast } from "sonner";
+import { notify } from "@/stores/noticeStore";
 import { commands } from "@/bindings";
 import { formatKeyCombination } from "../../../../lib/utils/keyboard";
 import { useOsType } from "../../../../hooks/useOsType";
@@ -110,9 +110,11 @@ export const ShortcutRecorder: React.FC<ShortcutRecorderProps> = ({
     if (isRecording || disabled) return;
     const result = await commands.startHandyKeysRecording("language");
     if (result.status === "error") {
-      toast.error(
-        t("settings.languages.errors.record", { error: String(result.error) }),
-      );
+      notify({
+        title: t("settings.languages.errors.record", {
+          error: String(result.error),
+        }),
+      });
       return;
     }
     keyedShortcutRef.current = "";

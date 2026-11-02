@@ -1,4 +1,4 @@
-import { toast } from "sonner";
+import { notify } from "@/stores/noticeStore";
 import {
   commands,
   type AppSettings as Settings,
@@ -11,7 +11,7 @@ import {
 async function unwrapOrToast(pending: Promise<Result<null, string>>) {
   const result = await pending;
   if (result.status === "error") {
-    toast.error(result.error);
+    notify({ title: result.error });
     throw new Error(result.error);
   }
 }

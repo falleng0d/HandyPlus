@@ -5,7 +5,11 @@ import { commands, type LanguageConfig, type SoundTheme } from "@/bindings";
 import { useSettings } from "../../../../hooks/useSettings";
 import { useSettingsStore } from "../../../../stores/settingsStore";
 import { useModelStore } from "../../../../stores/modelStore";
-import { LANGUAGES } from "../../../../lib/constants/languages";
+import {
+  LANGUAGES,
+  getLanguage,
+  languageName,
+} from "../../../../lib/constants/languages";
 import { Button } from "../../../ui/Button";
 import { Dropdown, type DropdownOption } from "../../../ui/Dropdown";
 import { ResetButton } from "../../../ui/ResetButton";
@@ -14,7 +18,7 @@ import { SettingsGroup } from "../../../ui/SettingsGroup";
 import { ShortcutRecorder } from "./ShortcutRecorder";
 
 const languageLabel = (code: string) =>
-  LANGUAGES.find((language) => language.value === code)?.label ?? code;
+  languageName(getLanguage(code).code, "en");
 
 export const LanguagesSettings: React.FC = () => {
   const { t } = useTranslation();
@@ -57,11 +61,17 @@ export const LanguagesSettings: React.FC = () => {
     }
   };
 
-  const usedLanguages = new Set(configs.map((c) => c.language));
-  const addOptions = LANGUAGES.filter(
-    (language) =>
-      language.value !== "auto" && !usedLanguages.has(language.value),
+  const usedLanguages = new Set(
+    configs.map((c) => getLanguage(c.language).code),
   );
+  const addOptions: DropdownOption[] = LANGUAGES.filter(
+    (language) => !usedLanguages.has(language.code),
+  )
+    .map((language) => ({
+      value: language.code,
+      label: languageLabel(language.code),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   const soundOptions: DropdownOption[] = [
     { value: "marimba", label: "Marimba" },

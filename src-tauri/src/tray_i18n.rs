@@ -1,7 +1,7 @@
 //! Tray menu strings
 //!
-//! Generated at compile time by build.rs from the "tray" keys in
-//! src/i18n/locales/en/translation.json.
+//! Generated at compile time by build.rs from the "tray" keys and the notice
+//! titles in src/i18n/locales/en/translation.json.
 //!
 //! To add a new tray menu item:
 //! 1. Add the key to en/translation.json under "tray"

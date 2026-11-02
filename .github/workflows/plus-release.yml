@@ -1,6 +1,6 @@
 name: "HandyPlus Release"
 
-# Builds the Windows (CUDA), Linux x64 (CUDA) and macOS installers. Windows
+# Builds the Windows, Linux x64 and macOS installers. Windows
 # and macOS are signed with the self-signed "HandyPlus Dev" certificate. A
 # version tag (e.g. 0.9.8) publishes them to a draft release; a manual run
 # only keeps them as workflow artifacts.
@@ -155,13 +155,6 @@ jobs:
           KARABINER_INPUT_LOCAL_CERT_SHA1: ${{ env.CERT_SHA1 }}
         shell: bash
         run: bun run build-signed ${{ matrix.args }}
-
-      - name: Check the CUDA provider is packaged (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          for deb in src-tauri/target/release/bundle/deb/*.deb; do
-            dpkg-deb -c "$deb" | grep -E 'usr/lib/Handy/libonnxruntime_providers_cuda\.so$'
-          done
 
       - name: Upload to the release
         if: github.ref_type == 'tag'
