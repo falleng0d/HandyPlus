@@ -340,7 +340,7 @@ fn create_audio_recorder(
         })
         .with_speech_state_callback({
             let app_handle = app_handle.clone();
-            move |active| crate::plus::overlay::emit_speech_active(&app_handle, active)
+            move |active| crate::plus::recording::speech_changed(&app_handle, active)
         })
         .with_audio_callback({
             let router = stream_router;

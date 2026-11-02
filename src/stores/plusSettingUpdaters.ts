@@ -81,4 +81,6 @@ export const plusSettingUpdaters: {
     unwrapOrToast(
       commands.changePostProcessTimeoutSecsSetting(value as number),
     ),
+  auto_stop_silence_secs: (value) =>
+    unwrapOrToast(commands.changeAutoStopSilenceSecsSetting(value as number)),
 };

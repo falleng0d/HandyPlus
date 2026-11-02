@@ -73,6 +73,7 @@ enum Remembered {
 /// Bookkeeping for the key press that started the current recording.
 struct Hold {
     pressed_at: Instant,
+    hotkey_string: String,
     /// Recording outlives the key: the next press stops it, releases are
     /// ignored. Always set for toggle; set for hold-or-toggle once a release
     /// has been classified as a tap.
@@ -170,8 +171,14 @@ enum Effect {
 /// Commands processed sequentially by the coordinator thread.
 enum Command {
     Input(InputEvent),
-    Cancel { recording_was_active: bool },
+    Cancel {
+        recording_was_active: bool,
+    },
     ProcessingFinished,
+    /// The voice detector started (`true`) or stopped passing speech.
+    Speech {
+        active: bool,
+    },
 }
 
 /// Decide whether a key-up should be deferred (so auto-repeat can cancel it)
@@ -216,12 +223,17 @@ fn classify_ptt_event(
 /// * toggle — releases are ignored, the next press stops (locked from the start)
 /// * hold-or-toggle — a release after a long hold stops; a release after a
 ///   short tap locks the session, and the next press stops
+///
+/// With a silence limit set, a locked session also stops once the voice
+/// detector has passed no speech for that long. A held key is never cut off.
 struct CoordinatorState {
     stage: Stage,
     hold: Option<Hold>,
     last_press: Option<Instant>,
     pending_release: Option<PendingRelease>,
     pending_press: Option<PendingPress>,
+    /// When the current recording last went quiet; `None` while speech passes.
+    silent_since: Option<Instant>,
 }
 
 impl CoordinatorState {
@@ -232,12 +244,71 @@ impl CoordinatorState {
             last_press: None,
             pending_release: None,
             pending_press: None,
+            silent_since: None,
         }
     }
 
-    /// Deadline of the deferred release, if any — drives `recv_timeout`.
+    /// Deadline of the deferred release, if any.
     fn grace_deadline(&self) -> Option<Instant> {
         self.pending_release.as_ref().map(|p| p.deadline)
+    }
+
+    /// When the current recording stops on silence, if it can. Only locked
+    /// sessions qualify: while the key is held, its release ends the session.
+    fn silence_deadline(&self, limit: Option<Duration>) -> Option<Instant> {
+        let limit = limit?;
+        let locked = self.hold.as_ref().is_some_and(|h| h.locked);
+        if !self.is_recording() || !locked {
+            return None;
+        }
+        self.silent_since.map(|since| since + limit)
+    }
+
+    /// The earliest timer the coordinator thread must wake for — drives
+    /// `recv_timeout`.
+    fn next_deadline(&self, silence_limit: Option<Duration>) -> Option<Instant> {
+        self.grace_deadline()
+            .into_iter()
+            .chain(self.silence_deadline(silence_limit))
+            .min()
+    }
+
+    fn on_deadline(&mut self, now: Instant, silence_limit: Option<Duration>) -> Option<Effect> {
+        if self.grace_deadline().is_some_and(|d| d <= now) {
+            return self.on_grace_expired();
+        }
+        if self
+            .silence_deadline(silence_limit)
+            .is_some_and(|d| d <= now)
+        {
+            return self.stop_on_silence();
+        }
+        None
+    }
+
+    fn is_recording(&self) -> bool {
+        matches!(self.stage, Stage::Recording(_))
+    }
+
+    fn on_speech(&mut self, active: bool, now: Instant) {
+        if self.is_recording() {
+            self.silent_since = (!active).then_some(now);
+        }
+    }
+
+    /// The locked session went quiet for too long: stop it as a press would.
+    fn stop_on_silence(&mut self) -> Option<Effect> {
+        let Stage::Recording(binding_id) = &self.stage else {
+            return None;
+        };
+        let binding_id = binding_id.clone();
+        let hotkey_string = self
+            .hold
+            .as_ref()
+            .map(|h| h.hotkey_string.clone())
+            .unwrap_or_else(|| binding_id.clone());
+        debug!("No speech for '{binding_id}' within the silence limit; stopping");
+        Some(self.begin_processing(binding_id, hotkey_string))
     }
 
     /// Whether the current session (recording, or remembered for the drain)
@@ -490,8 +561,14 @@ impl CoordinatorState {
 
     /// Reconcile the optimistic `Stage::Recording` after the executor reports
     /// whether recording actually began (microphone access can be denied).
-    fn on_start_result(&mut self, binding_id: &str, started: bool) {
-        if !started && matches!(&self.stage, Stage::Recording(id) if id == binding_id) {
+    /// Silence is counted from `now`, when the microphone is live.
+    fn on_start_result(&mut self, binding_id: &str, started: bool, now: Instant) {
+        if !matches!(&self.stage, Stage::Recording(id) if id == binding_id) {
+            return;
+        }
+        if started {
+            self.silent_since = Some(now);
+        } else {
             self.stage = Stage::Idle;
             self.hold = None;
         }
@@ -508,7 +585,12 @@ impl CoordinatorState {
         locked: bool,
     ) -> Effect {
         self.stage = Stage::Recording(binding_id.clone());
-        self.hold = Some(Hold { pressed_at, locked });
+        self.hold = Some(Hold {
+            pressed_at,
+            hotkey_string: hotkey_string.clone(),
+            locked,
+        });
+        self.silent_since = None;
         Effect::Start {
             binding_id,
             hotkey_string,
@@ -547,11 +629,18 @@ impl TranscriptionCoordinator {
                 let mut state = CoordinatorState::new();
 
                 loop {
-                    let cmd = if let Some(deadline) = state.grace_deadline() {
+                    let silence_limit = if state.is_recording() {
+                        crate::plus::recording::auto_stop_silence(&app)
+                    } else {
+                        None
+                    };
+                    let cmd = if let Some(deadline) = state.next_deadline(silence_limit) {
                         match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
                             Ok(cmd) => cmd,
                             Err(mpsc::RecvTimeoutError::Timeout) => {
-                                if let Some(effect) = state.on_grace_expired() {
+                                if let Some(effect) =
+                                    state.on_deadline(Instant::now(), silence_limit)
+                                {
                                     run_effect(&app, &mut state, effect);
                                 }
                                 continue;
@@ -579,6 +668,7 @@ impl TranscriptionCoordinator {
                                 run_effect(&app, &mut state, effect);
                             }
                         }
+                        Command::Speech { active } => state.on_speech(active, Instant::now()),
                     }
                 }
                 debug!("Transcription coordinator exited");
@@ -666,6 +756,14 @@ impl TranscriptionCoordinator {
             warn!("Transcription coordinator channel closed");
         }
     }
+
+    /// Report whether the voice detector is passing speech, for the silence
+    /// stop of locked sessions.
+    pub fn notify_speech(&self, active: bool) {
+        if self.tx.send(Command::Speech { active }).is_err() {
+            warn!("Transcription coordinator channel closed");
+        }
+    }
 }
 
 fn run_effect(app: &AppHandle, state: &mut CoordinatorState, effect: Effect) {
@@ -675,7 +773,7 @@ fn run_effect(app: &AppHandle, state: &mut CoordinatorState, effect: Effect) {
             hotkey_string,
         } => {
             let started = start(app, &binding_id, &hotkey_string);
-            state.on_start_result(&binding_id, started);
+            state.on_start_result(&binding_id, started, Instant::now());
         }
         Effect::Stop {
             binding_id,
@@ -1201,7 +1299,7 @@ mod tests {
         let effect = state.on_input(ptt_input(true), Instant::now());
         assert!(matches!(effect, Some(Effect::Start { .. })));
 
-        state.on_start_result(BINDING, false);
+        state.on_start_result(BINDING, false, Instant::now());
         assert_eq!(state.stage, Stage::Idle);
     }
 
@@ -1613,5 +1711,94 @@ mod tests {
             "held 400ms since the real key-down: must stop, not lock"
         );
         assert_eq!(state.stage, Stage::Processing);
+    }
+
+    const SILENCE: Option<Duration> = Some(Duration::from_secs(2));
+
+    /// Starts a recording at `t0` the way the coordinator thread does.
+    fn start_recording(state: &mut CoordinatorState, mode: ShortcutActivation, t0: Instant) {
+        assert!(matches!(
+            state.on_input(input(mode, true), t0),
+            Some(Effect::Start { .. })
+        ));
+        state.on_start_result(BINDING, true, t0);
+    }
+
+    /// Hold-or-toggle tap at `t0`: recording stays locked on.
+    fn tap_to_lock(state: &mut CoordinatorState, binding: &str, t0: Instant) {
+        let edge = |is_pressed| InputEvent {
+            binding_id: binding.to_string(),
+            hotkey_string: binding.to_string(),
+            ..input(ShortcutActivation::HoldOrToggle, is_pressed)
+        };
+        assert!(matches!(
+            state.on_input(edge(true), t0),
+            Some(Effect::Start { .. })
+        ));
+        state.on_start_result(binding, true, t0);
+        assert!(state.on_input(edge(false), t0 + ms(100)).is_none());
+        assert!(
+            state.on_grace_expired().is_none(),
+            "a tap locks the session"
+        );
+    }
+
+    #[test]
+    fn locked_session_stops_after_silence_limit() {
+        for binding in [BINDING, "transcribe_with_post_process"] {
+            let mut state = CoordinatorState::new();
+            let t0 = Instant::now();
+            tap_to_lock(&mut state, binding, t0);
+
+            state.on_speech(true, t0 + ms(500));
+            assert_eq!(state.next_deadline(SILENCE), None, "speech is passing");
+            state.on_speech(false, t0 + ms(1500));
+            assert_eq!(state.next_deadline(SILENCE), Some(t0 + ms(3500)));
+            assert!(state.on_deadline(t0 + ms(3000), SILENCE).is_none());
+            assert_eq!(
+                state.on_deadline(t0 + ms(3500), SILENCE),
+                Some(Effect::Stop {
+                    binding_id: binding.to_string(),
+                    hotkey_string: binding.to_string(),
+                })
+            );
+            assert_eq!(state.stage, Stage::Processing);
+        }
+    }
+
+    #[test]
+    fn toggle_session_stops_after_silence_counted_from_start() {
+        let mut state = CoordinatorState::new();
+        let t0 = Instant::now();
+        start_recording(&mut state, ShortcutActivation::Toggle, t0);
+        assert_eq!(state.next_deadline(SILENCE), Some(t0 + ms(2000)));
+        assert!(matches!(
+            state.on_deadline(t0 + ms(2000), SILENCE),
+            Some(Effect::Stop { .. })
+        ));
+    }
+
+    #[test]
+    fn silence_stop_is_off_without_a_limit() {
+        let mut state = CoordinatorState::new();
+        let t0 = Instant::now();
+        start_recording(&mut state, ShortcutActivation::Toggle, t0);
+        assert_eq!(state.next_deadline(None), None);
+        assert!(state.on_deadline(t0 + ms(60_000), None).is_none());
+    }
+
+    #[test]
+    fn held_key_never_stops_on_silence() {
+        for mode in [
+            ShortcutActivation::PushToTalk,
+            ShortcutActivation::HoldOrToggle,
+        ] {
+            let mut state = CoordinatorState::new();
+            let t0 = Instant::now();
+            start_recording(&mut state, mode, t0);
+            assert_eq!(state.next_deadline(SILENCE), None);
+            assert!(state.on_deadline(t0 + ms(60_000), SILENCE).is_none());
+            assert!(matches!(state.stage, Stage::Recording(_)));
+        }
     }
 }

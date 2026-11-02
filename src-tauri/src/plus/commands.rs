@@ -222,3 +222,13 @@ pub fn change_post_process_timeout_secs_setting(app: AppHandle, secs: u32) -> Re
     update_settings(&app, |s| s.post_process_timeout_secs = secs);
     Ok(())
 }
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_auto_stop_silence_secs_setting(app: AppHandle, secs: f32) -> Result<(), String> {
+    if !secs.is_finite() || secs < 0.0 {
+        return Err(format!("Invalid silence limit: {secs}"));
+    }
+    update_settings(&app, |s| s.auto_stop_silence_secs = secs);
+    Ok(())
+}

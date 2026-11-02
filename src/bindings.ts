@@ -1082,6 +1082,14 @@ async changeCustomWordCorrectionEnabledSetting(enabled: boolean) : Promise<Resul
     else return { status: "error", error: e  as any };
 }
 },
+async changeAutoStopSilenceSecsSetting(secs: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_auto_stop_silence_secs_setting", { secs }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async changeTranscriptionTimeoutSecsSetting(secs: number) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("change_transcription_timeout_secs_setting", { secs }) };
@@ -1186,7 +1194,7 @@ vad_backend?: VadBackend;
  * not gated on this — that follows model capability. Migrated from the old
  * `overlay_position` (position `none` → style `None`).
  */
-overlay_style?: OverlayStyle; vad_threshold: number; vad_prefill_ms: number; vad_hangover_ms: number; vad_onset_ms: number; context_lines: number; context_max_characters: number | null; context_max_paragraphs: number; lowercase_first_letter: boolean; continuation_lowercase: boolean; remove_trailing_punctuation: boolean; typing_interval_ms: number; on_recording_start_script: string; on_recording_end_script: string; custom_word_correction_enabled: boolean; transcription_timeout_secs: number; post_process_timeout_secs: number; lower_volume_while_recording: boolean; volume_while_recording: number; pause_dragon_when_dictating: boolean; language_configs: LanguageConfig[]; language_cycle_shortcut: string; language_shortcut_sound_theme: SoundTheme }
+overlay_style?: OverlayStyle; vad_threshold: number; vad_prefill_ms: number; vad_hangover_ms: number; vad_onset_ms: number; context_lines: number; context_max_characters: number | null; context_max_paragraphs: number; lowercase_first_letter: boolean; continuation_lowercase: boolean; remove_trailing_punctuation: boolean; typing_interval_ms: number; on_recording_start_script: string; on_recording_end_script: string; custom_word_correction_enabled: boolean; transcription_timeout_secs: number; post_process_timeout_secs: number; auto_stop_silence_secs: number; lower_volume_while_recording: boolean; volume_while_recording: number; pause_dragon_when_dictating: boolean; language_configs: LanguageConfig[]; language_cycle_shortcut: string; language_shortcut_sound_theme: SoundTheme }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { transcribe: string[]; ort: string[]; gpu_devices: GpuDeviceOption[] }

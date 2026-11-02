@@ -3,9 +3,11 @@
 //! a recording is cancelled, and run at most once per session.
 
 use crate::settings::get_settings;
+use crate::TranscriptionCoordinator;
 use log::{debug, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::AppHandle;
+use std::time::Duration;
+use tauri::{AppHandle, Manager};
 
 static SESSION_ACTIVE: AtomicBool = AtomicBool::new(false);
 
@@ -43,6 +45,23 @@ pub fn ended(app: &AppHandle) {
     if settings.pause_dragon_when_dictating {
         crate::plus::dragon::resume(app.clone());
     }
+}
+
+/// The voice detector started or stopped passing speech.
+pub fn speech_changed(app: &AppHandle, active: bool) {
+    crate::plus::overlay::emit_speech_active(app, active);
+    if let Some(coordinator) = app.try_state::<TranscriptionCoordinator>() {
+        coordinator.notify_speech(active);
+    }
+}
+
+/// How long a held recording may go without speech before it stops; `None`
+/// when the setting is zero.
+pub fn auto_stop_silence(app: &AppHandle) -> Option<Duration> {
+    let secs = get_settings(app).auto_stop_silence_secs;
+    (secs > 0.0)
+        .then(|| Duration::try_from_secs_f32(secs).ok())
+        .flatten()
 }
 
 fn run_script(script: &str, context: &'static str) {

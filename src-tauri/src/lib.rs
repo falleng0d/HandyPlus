@@ -790,6 +790,7 @@ pub fn run(cli_args: CliArgs) {
             plus::commands::change_custom_word_correction_enabled_setting,
             plus::commands::change_transcription_timeout_secs_setting,
             plus::commands::change_post_process_timeout_secs_setting,
+            plus::commands::change_auto_stop_silence_secs_setting,
         ])
         .events(collect_events![
             managers::history::HistoryUpdatePayload,

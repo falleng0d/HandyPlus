@@ -208,6 +208,10 @@
           "push_to_talk": "Records while you hold the shortcut",
           "toggle": "Tap the shortcut to start recording, tap again to stop"
         }
+      },
+      "autoStopSilence": {
+        "title": "Stop on Silence",
+        "description": "Stop and transcribe a recording that stays on after you let go of the shortcut (a tap in Auto mode, or Toggle mode) once no speech is detected for this long. Never stops while the shortcut is held. 0 turns it off."
       }
     },
     "models": {
