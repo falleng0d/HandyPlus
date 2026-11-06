@@ -208,6 +208,8 @@ enum Command {
     Speech {
         active: bool,
     },
+    /// The confirm key (Enter) was pressed.
+    Confirm,
 }
 
 /// Decide whether a key-up should be deferred (so auto-repeat can cancel it)
@@ -326,6 +328,21 @@ impl CoordinatorState {
 
     /// The locked session went quiet for too long: stop it as a press would.
     fn stop_on_silence(&mut self) -> Option<Effect> {
+        debug!("No speech within the silence limit");
+        self.stop_locked()
+    }
+
+    /// The confirm key finishes a locked session as its shortcut would. A
+    /// held key keeps the session until its release.
+    fn on_confirm(&mut self) -> Option<Effect> {
+        if !self.is_recording_locked() {
+            return None;
+        }
+        debug!("Confirm key pressed");
+        self.stop_locked()
+    }
+
+    fn stop_locked(&mut self) -> Option<Effect> {
         let Stage::Recording(binding_id) = &self.stage else {
             return None;
         };
@@ -335,7 +352,7 @@ impl CoordinatorState {
             .as_ref()
             .map(|h| h.hotkey_string.clone())
             .unwrap_or_else(|| binding_id.clone());
-        debug!("No speech for '{binding_id}' within the silence limit; stopping");
+        debug!("Stopping locked session for '{binding_id}'");
         Some(self.begin_processing(binding_id, hotkey_string))
     }
 
@@ -661,7 +678,14 @@ impl TranscriptionCoordinator {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 let mut state = CoordinatorState::new();
 
+                let mut confirm_active = false;
+
                 loop {
+                    let locked = state.is_recording_locked();
+                    if locked != confirm_active {
+                        crate::plus::confirm::set_active(&app, locked);
+                        confirm_active = locked;
+                    }
                     let silence_limit = if state.is_recording() {
                         crate::plus::recording::auto_stop_silence(&app)
                     } else {
@@ -715,6 +739,11 @@ impl TranscriptionCoordinator {
                             }
                         }
                         Command::Speech { active } => state.on_speech(active, Instant::now()),
+                        Command::Confirm => {
+                            if let Some(effect) = state.on_confirm() {
+                                run_effect(&app, &mut state, effect);
+                            }
+                        }
                     }
                     if !was_locked && state.is_recording_locked() {
                         emit_recording_phase(&app, RecordingPhase::Locked);
@@ -810,6 +839,13 @@ impl TranscriptionCoordinator {
     /// stop of locked sessions.
     pub fn notify_speech(&self, active: bool) {
         if self.tx.send(Command::Speech { active }).is_err() {
+            warn!("Transcription coordinator channel closed");
+        }
+    }
+
+    /// Finish a locked recording, as pressing its shortcut again would.
+    pub fn notify_confirm(&self) {
+        if self.tx.send(Command::Confirm).is_err() {
             warn!("Transcription coordinator channel closed");
         }
     }
@@ -1853,6 +1889,42 @@ mod tests {
             start_recording(&mut state, mode, t0);
             assert_eq!(state.next_deadline(SILENCE), None);
             assert!(state.on_deadline(t0 + ms(60_000), SILENCE).is_none());
+            assert!(matches!(state.stage, Stage::Recording(_)));
+        }
+    }
+
+    #[test]
+    fn confirm_stops_a_locked_session_like_a_press() {
+        for binding in [BINDING, "transcribe_with_post_process"] {
+            let mut state = CoordinatorState::new();
+            tap_to_lock(&mut state, binding, Instant::now());
+            assert_eq!(
+                state.on_confirm(),
+                Some(Effect::Stop {
+                    binding_id: binding.to_string(),
+                    hotkey_string: binding.to_string(),
+                })
+            );
+            assert_eq!(state.stage, Stage::Processing);
+        }
+
+        let mut state = CoordinatorState::new();
+        start_recording(&mut state, ShortcutActivation::Toggle, Instant::now());
+        assert!(matches!(state.on_confirm(), Some(Effect::Stop { .. })));
+    }
+
+    #[test]
+    fn confirm_is_ignored_unless_a_session_is_locked() {
+        let mut state = CoordinatorState::new();
+        assert!(state.on_confirm().is_none());
+
+        for mode in [
+            ShortcutActivation::PushToTalk,
+            ShortcutActivation::HoldOrToggle,
+        ] {
+            let mut state = CoordinatorState::new();
+            start_recording(&mut state, mode, Instant::now());
+            assert!(state.on_confirm().is_none(), "a held key keeps recording");
             assert!(matches!(state.stage, Stage::Recording(_)));
         }
     }

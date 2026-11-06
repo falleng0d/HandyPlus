@@ -35,6 +35,9 @@ pub fn handle_shortcut_event(
     if crate::plus::languages::handle_shortcut(app, binding_id, is_pressed) {
         return;
     }
+    if crate::plus::confirm::handle_shortcut(app, binding_id, is_pressed) {
+        return;
+    }
 
     let settings = get_settings(app);
 
