@@ -83,6 +83,7 @@ local-stop:
 [macos]
 local-install-app: local-stop
 	test -d "{{ app_source }}"
+	rm -rf "{{ app_destination }}"
 	ditto "{{ app_source }}" "{{ app_destination }}"
 	codesign --verify --deep --strict --verbose=2 "{{ app_destination }}"
 
